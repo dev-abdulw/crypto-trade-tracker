@@ -66,3 +66,14 @@ export function addRecentCoin(coin: RecentCoin) {
   const rest = getRecentCoins().filter((c) => c.coingecko_id !== coin.coingecko_id);
   writeJson(RECENT_COINS_KEY, [coin, ...rest].slice(0, 8));
 }
+
+const RECAP_KEY = 'ctt.recapDismissed';
+
+/** Month key (yyyy-MM) whose recap card the user last dismissed. */
+export function getDismissedRecap(): string | null {
+  return readJson<string>(RECAP_KEY);
+}
+
+export function dismissRecap(month: string) {
+  writeJson(RECAP_KEY, month);
+}

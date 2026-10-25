@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import { useEnsureSnapshots } from '../data/months';
 
 type NavItem = { to: string; label: string; end?: boolean; primary?: boolean };
 
@@ -17,6 +18,7 @@ function navClass({ isActive }: { isActive: boolean }) {
 }
 
 export default function Layout() {
+  useEnsureSnapshots();
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top bar (desktop nav) */}
