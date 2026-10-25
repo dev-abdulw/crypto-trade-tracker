@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-surface: #0b0f14;
+  --color-card: #131a22;
+  --color-border: #222c38;
+  --color-fg: #e6edf3;
+  --color-muted: #8b98a5;
+  --color-accent: #3b82f6;
+  --color-profit: #22c55e;
+  --color-loss: #ef4444;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-fg);
+  font-feature-settings: 'tnum';
+}
