@@ -58,3 +58,13 @@ export interface MonthSnapshotRow extends Timestamps {
 
 /** Columns the client sends on insert (user_id/id/timestamps come from DB defaults). */
 export type Insert<T> = Omit<T, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
+
+export interface BalanceAdjustmentRow extends Timestamps {
+  id: string;
+  /** Signed: + gain, − loss. */
+  amount_usdt: Numeric;
+  /** Portfolio value just before the adjustment (for its %). */
+  basis_usdt: Numeric | null;
+  occurred_at: string;
+  note: string | null;
+}

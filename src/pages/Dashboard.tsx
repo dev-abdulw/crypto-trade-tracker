@@ -1,10 +1,11 @@
 import { format, subMonths } from 'date-fns';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import AdjustBalanceForm from '../components/AdjustBalanceForm';
 import { EquityChart } from '../components/charts';
 import PageHeader from '../components/PageHeader';
 import PriceStatus from '../components/PriceStatus';
-import { Card, ErrorText, Pnl } from '../components/ui';
+import { Card, ErrorText, Modal, Pnl } from '../components/ui';
 import { useOverview } from '../data/months';
 import type { PositionView } from '../data/trades';
 import { formatDate, formatDuration } from '../lib/dates';
@@ -13,10 +14,23 @@ import { formatPct, formatPrice, formatQty, formatUsdt, safeDiv, d } from '../li
 import { buildMonthlyReport, monthBounds, monthKey, monthStart } from '../lib/monthly';
 import { dismissRecap, getDismissedRecap } from '../lib/settings';
 
-function Kpi({ label, children, sub }: { label: string; children: ReactNode; sub?: ReactNode }) {
+function Kpi({
+  label,
+  children,
+  sub,
+  action,
+}: {
+  label: string;
+  children: ReactNode;
+  sub?: ReactNode;
+  action?: ReactNode;
+}) {
   return (
     <Card className="p-3">
-      <div className="text-xs text-muted">{label}</div>
+      <div className="flex items-center justify-between gap-2 text-xs text-muted">
+        {label}
+        {action}
+      </div>
       <div className="mt-1 text-lg font-semibold tabular-nums">{children}</div>
       {sub && <div className="text-xs tabular-nums">{sub}</div>}
     </Card>
@@ -92,17 +106,23 @@ function OpenPositions({ open }: { open: PositionView[] }) {
 export default function Dashboard() {
   const overview = useOverview();
   const [dismissed, setDismissed] = useState(getDismissedRecap);
+  const [adjusting, setAdjusting] = useState(false);
   const data = overview.data;
 
   const derived = useMemo(() => {
     if (!data) return null;
     const now = new Date();
-    const thisMonth = buildMonthlyReport(monthKey(now), data.flows, data.reportPositions);
+    const thisMonth = buildMonthlyReport(
+      monthKey(now),
+      data.flows,
+      data.reportPositions,
+      data.adjustments,
+    );
     const prevKey = monthKey(subMonths(now, 1));
     const hadActivityBefore =
       data.firstActivity !== null && data.firstActivity < monthBounds(prevKey).end;
     const recap = hadActivityBefore
-      ? buildMonthlyReport(prevKey, data.flows, data.reportPositions)
+      ? buildMonthlyReport(prevKey, data.flows, data.reportPositions, data.adjustments)
       : null;
     const valid = data.views.filter((v) => v.summary);
     return {
@@ -112,6 +132,7 @@ export default function Dashboard() {
       equity: equitySeries(
         data.flows,
         data.reportPositions.map((p) => p.summary),
+        data.adjustments,
       ),
       open: valid.filter((v) => v.row.status === 'open' && v.summary!.remainingQty.gt(0)),
       recentClosed: valid
@@ -171,8 +192,8 @@ export default function Dashboard() {
             </div>
             <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div>
-                <div className="text-xs text-muted">Realized P&L</div>
-                <Pnl value={derived.recap.realizedPnl} className="font-medium" />
+                <div className="text-xs text-muted">P&L</div>
+                <Pnl value={derived.recap.pnl} className="font-medium" />
               </div>
               <div>
                 <div className="text-xs text-muted">Return</div>
@@ -222,7 +243,28 @@ export default function Dashboard() {
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <Kpi label="Portfolio value">{formatUsdt(account.portfolioValue)}</Kpi>
+          <Kpi
+            label="Portfolio value"
+            action={
+              <button
+                type="button"
+                onClick={() => setAdjusting(true)}
+                className="text-muted hover:text-fg underline decoration-dotted"
+                title="Correct the balance to match Binance"
+              >
+                Edit
+              </button>
+            }
+            sub={
+              !account.adjustmentsTotal.isZero() && (
+                <span className="text-muted">
+                  incl. adjustments <Pnl value={account.adjustmentsTotal} />
+                </span>
+              )
+            }
+          >
+            {formatUsdt(account.portfolioValue)}
+          </Kpi>
           <Kpi label="Net invested">{formatUsdt(account.netInvested)}</Kpi>
           <Kpi
             label="Total return"
@@ -233,10 +275,10 @@ export default function Dashboard() {
             </span>
           </Kpi>
           <Kpi
-            label="This month (realized)"
+            label="This month"
             sub={<span className="text-muted">{formatPct(derived.thisMonth.returnPct)}</span>}
           >
-            <Pnl value={derived.thisMonth.realizedPnl} />
+            <Pnl value={derived.thisMonth.pnl} />
           </Kpi>
           <Kpi
             label="Unrealized P&L"
@@ -297,6 +339,15 @@ export default function Dashboard() {
           )}
         </Card>
       </div>
+      <Modal open={adjusting} title="Edit portfolio balance" onClose={() => setAdjusting(false)}>
+        {adjusting && (
+          <AdjustBalanceForm
+            portfolioValue={account.portfolioValue}
+            cashUsdt={account.cashUsdt}
+            onDone={() => setAdjusting(false)}
+          />
+        )}
+      </Modal>
     </>
   );
 }

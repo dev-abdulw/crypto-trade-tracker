@@ -7,13 +7,13 @@ import { Button, Card, Field, inputClass } from '../components/ui';
 import { downloadFile, exportBackup, importBackup } from '../data/backup';
 import { useSettings } from '../data/settings';
 import { usePortfolio } from '../data/trades';
+import { useAdjustments } from '../data/adjustments';
 import { useCapitalFlows } from '../data/capital';
 import { parseBackup, toCsv } from '../lib/exporter';
 import { parseDecimal } from '../lib/fillMath';
 import { saveSettings, type AppSettings } from '../lib/settings';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
-import type { CapitalFlowRow } from '../lib/types';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -105,6 +105,7 @@ function DataTools() {
   const qc = useQueryClient();
   const portfolio = usePortfolio();
   const flows = useCapitalFlows();
+  const adjustments = useAdjustments();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const stamp = () => format(new Date(), 'yyyy-MM-dd');
@@ -182,11 +183,26 @@ function DataTools() {
   };
 
   const exportCapitalCsv = () => {
-    const csv = toCsv<CapitalFlowRow>(flows.data ?? [], [
-      { header: 'occurred_at', value: (f) => f.occurred_at },
-      { header: 'type', value: (f) => f.type },
-      { header: 'amount_usdt', value: (f) => String(f.amount_usdt) },
-      { header: 'note', value: (f) => f.note },
+    // Deposits/withdrawals plus balance adjustments (signed: + gain, − loss), oldest first.
+    const rows = [
+      ...(flows.data ?? []).map((f) => ({
+        at: f.occurred_at,
+        type: f.type,
+        amount: String(f.amount_usdt),
+        note: f.note,
+      })),
+      ...(adjustments.data ?? []).map((a) => ({
+        at: a.occurred_at,
+        type: 'adjustment',
+        amount: String(a.amount_usdt),
+        note: a.note,
+      })),
+    ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+    const csv = toCsv(rows, [
+      { header: 'occurred_at', value: (r) => r.at },
+      { header: 'type', value: (r) => r.type },
+      { header: 'amount_usdt', value: (r) => r.amount },
+      { header: 'note', value: (r) => r.note },
     ]);
     downloadFile(`capital-${stamp()}.csv`, csv, 'text/csv');
   };
@@ -195,8 +211,9 @@ function DataTools() {
     run('import', async () => {
       const backup = parseBackup(await file.text());
       const ok = confirm(
-        `Import ${backup.positions.length} positions, ${backup.fills.length} fills and ` +
-          `${backup.capital_flows.length} capital entries from ${file.name}?\n\n` +
+        `Import ${backup.positions.length} positions, ${backup.fills.length} fills, ` +
+          `${backup.capital_flows.length} capital entries and ${backup.balance_adjustments.length} ` +
+          `adjustments from ${file.name}?\n\n` +
           'Rows already in your account with the same id are overwritten; nothing is deleted.',
       );
       if (!ok) return;

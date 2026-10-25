@@ -8,7 +8,13 @@ import {
   startOfMonth,
 } from 'date-fns';
 import { d, safeDiv, sum, ZERO, type Decimal } from './money';
-import { netFlows, toDate, type CapitalFlowInput, type PositionSummary } from './pnl';
+import {
+  netFlows,
+  toDate,
+  type AdjustmentInput,
+  type CapitalFlowInput,
+  type PositionSummary,
+} from './pnl';
 
 // Monthly aggregation (PLAN.md 2.5). Months are in the browser's local time zone.
 
@@ -37,7 +43,12 @@ export interface MonthlyReport {
   /** Exclusive: first instant of the next month. */
   end: Date;
 
+  /** P&L from sells (and dust write-offs) made this month. */
   realizedPnl: Decimal;
+  /** Σ balance adjustments made this month (signed). */
+  adjustmentsPnl: Decimal;
+  /** realizedPnl + adjustmentsPnl — the month's result. */
+  pnl: Decimal;
   /** Modified Dietz: pnl / (start capital + time-weighted flows). */
   returnPct: Decimal | null;
   /** pnl / start capital. */
@@ -93,18 +104,22 @@ export function deriveStyle(p: PositionForReport): TradeStyle {
   return firstFillAt && closedAt && isSameDay(firstFillAt, closedAt) ? 'day' : 'swing';
 }
 
-/** Capital (net invested + realized P&L) from everything strictly before `at`. */
+/** Capital (net invested + realized P&L + adjustments) from everything strictly before `at`. */
 export function capitalAt(
   at: Date,
   flows: readonly CapitalFlowInput[],
   positions: readonly PositionForReport[],
+  adjustments: readonly AdjustmentInput[] = [],
 ): Decimal {
   const realized = sum(
     positions.flatMap((p) =>
       p.summary.realizations.filter((r) => r.at < at).map((r) => r.realizedPnl),
     ),
   );
-  return netFlows(flows, at).plus(realized);
+  const adjusted = sum(
+    adjustments.filter((a) => toDate(a.occurred_at) < at).map((a) => a.amount_usdt),
+  );
+  return netFlows(flows, at).plus(realized).plus(adjusted);
 }
 
 function toTradeStat(p: PositionForReport): TradeStat {
@@ -128,6 +143,7 @@ export function buildMonthlyReport(
   key: string,
   flows: readonly CapitalFlowInput[],
   positions: readonly PositionForReport[],
+  adjustments: readonly AdjustmentInput[] = [],
 ): MonthlyReport {
   const { start, end } = monthBounds(key);
   const inMonth = (t: Date) => t >= start && t < end;
@@ -138,6 +154,9 @@ export function buildMonthlyReport(
     p.summary.realizations.filter((r) => inMonth(r.at)).map((r) => ({ symbol: p.symbol, r })),
   );
   const realizedPnl = sum(events.map((e) => e.r.realizedPnl));
+  const monthAdjustments = adjustments.filter((a) => inMonth(toDate(a.occurred_at)));
+  const adjustmentsPnl = sum(monthAdjustments.map((a) => a.amount_usdt));
+  const pnl = realizedPnl.plus(adjustmentsPnl);
 
   // Capital and flows.
   const monthFlows = flows.filter((f) => inMonth(toDate(f.occurred_at)));
@@ -145,8 +164,8 @@ export function buildMonthlyReport(
   const withdrawals = sum(
     monthFlows.filter((f) => f.type === 'withdrawal').map((f) => f.amount_usdt),
   );
-  const startCapital = capitalAt(start, flows, positions);
-  const endCapital = capitalAt(end, flows, positions);
+  const startCapital = capitalAt(start, flows, positions, adjustments);
+  const endCapital = capitalAt(end, flows, positions, adjustments);
 
   const weightedFlows = sum(
     monthFlows.map((f) => {
@@ -184,6 +203,10 @@ export function buildMonthlyReport(
     const k = format(r.at, 'yyyy-MM-dd');
     byDay.set(k, (byDay.get(k) ?? ZERO).plus(r.realizedPnl));
   }
+  for (const a of monthAdjustments) {
+    const k = format(toDate(a.occurred_at), 'yyyy-MM-dd');
+    byDay.set(k, (byDay.get(k) ?? ZERO).plus(a.amount_usdt));
+  }
   let running: Decimal = ZERO;
   const daily = eachDayOfInterval({ start, end: new Date(end.getTime() - 1) }).map((day) => {
     const date = format(day, 'yyyy-MM-dd');
@@ -210,8 +233,10 @@ export function buildMonthlyReport(
     start,
     end,
     realizedPnl,
-    returnPct: dietzBase.gt(0) ? realizedPnl.div(dietzBase) : null,
-    simpleReturnPct: startCapital.gt(0) ? realizedPnl.div(startCapital) : null,
+    adjustmentsPnl,
+    pnl,
+    returnPct: dietzBase.gt(0) ? pnl.div(dietzBase) : null,
+    simpleReturnPct: startCapital.gt(0) ? pnl.div(startCapital) : null,
     startCapital,
     endCapital,
     deposits,

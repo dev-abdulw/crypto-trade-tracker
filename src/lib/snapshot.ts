@@ -7,7 +7,13 @@ import {
   type PositionForReport,
 } from './monthly';
 import { sum, ZERO, d } from './money';
-import { computePosition, toDate, type CapitalFlowInput, type FillInput } from './pnl';
+import {
+  computePosition,
+  toDate,
+  type AdjustmentInput,
+  type CapitalFlowInput,
+  type FillInput,
+} from './pnl';
 
 // Month-end snapshots (PLAN.md 3.4): frozen holdings value for a finished month.
 
@@ -73,8 +79,9 @@ export function buildMonthSnapshot(
   reportPositions: readonly PositionForReport[],
   holdings: readonly Holding[],
   prices: Record<string, number | undefined>,
+  adjustments: readonly AdjustmentInput[] = [],
 ): MonthSnapshotValues {
-  const report = buildMonthlyReport(key, flows, reportPositions);
+  const report = buildMonthlyReport(key, flows, reportPositions, adjustments);
   const unrealized = sum(
     holdings.map((h) => {
       const price = prices[h.coingecko_id];
@@ -86,7 +93,7 @@ export function buildMonthSnapshot(
     month: format(report.start, 'yyyy-MM-dd'),
     start_capital: dp(report.startCapital),
     end_capital: dp(report.endCapital),
-    realized_pnl: dp(report.realizedPnl),
+    realized_pnl: dp(report.pnl),
     unrealized_pnl_at_close: dp(unrealized),
     // capital minus cost of what is held, plus its market value
     portfolio_value_at_close: dp(report.endCapital.plus(unrealized)),

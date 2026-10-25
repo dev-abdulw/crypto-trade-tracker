@@ -1,7 +1,20 @@
 import { supabase } from '../lib/supabase';
 import { BACKUP_APP, BACKUP_VERSION, type Backup } from '../lib/exporter';
-import type { CapitalFlowRow, FillRow, MonthSnapshotRow, PositionRow } from '../lib/types';
-import { CAPITAL_FLOW_COLS, fetchAll, FILL_COLS, POSITION_COLS, unwrap } from './db';
+import type {
+  BalanceAdjustmentRow,
+  CapitalFlowRow,
+  FillRow,
+  MonthSnapshotRow,
+  PositionRow,
+} from '../lib/types';
+import {
+  ADJUSTMENT_COLS,
+  CAPITAL_FLOW_COLS,
+  fetchAll,
+  FILL_COLS,
+  POSITION_COLS,
+  unwrap,
+} from './db';
 
 const SNAPSHOT_COLS =
   'month,start_capital::text,end_capital::text,realized_pnl::text,unrealized_pnl_at_close::text,' +
@@ -15,20 +28,29 @@ const strip = <T extends { user_id?: string; created_at?: string; updated_at?: s
 }: T) => rest;
 
 export async function exportBackup() {
-  const [capital_flows, positions, fills, month_snapshots] = await Promise.all([
-    fetchAll<CapitalFlowRow>((f, t) =>
-      supabase.from('capital_flows').select(CAPITAL_FLOW_COLS).order('occurred_at').range(f, t),
-    ),
-    fetchAll<PositionRow>((f, t) =>
-      supabase.from('positions').select(POSITION_COLS).order('opened_at').range(f, t),
-    ),
-    fetchAll<FillRow>((f, t) =>
-      supabase.from('fills').select(FILL_COLS).order('executed_at').range(f, t),
-    ),
-    fetchAll<Omit<MonthSnapshotRow, 'id' | 'user_id' | 'created_at' | 'updated_at'>>((f, t) =>
-      supabase.from('month_snapshots').select(SNAPSHOT_COLS).order('month').range(f, t),
-    ),
-  ]);
+  const [capital_flows, positions, fills, month_snapshots, balance_adjustments] = await Promise.all(
+    [
+      fetchAll<CapitalFlowRow>((f, t) =>
+        supabase.from('capital_flows').select(CAPITAL_FLOW_COLS).order('occurred_at').range(f, t),
+      ),
+      fetchAll<PositionRow>((f, t) =>
+        supabase.from('positions').select(POSITION_COLS).order('opened_at').range(f, t),
+      ),
+      fetchAll<FillRow>((f, t) =>
+        supabase.from('fills').select(FILL_COLS).order('executed_at').range(f, t),
+      ),
+      fetchAll<Omit<MonthSnapshotRow, 'id' | 'user_id' | 'created_at' | 'updated_at'>>((f, t) =>
+        supabase.from('month_snapshots').select(SNAPSHOT_COLS).order('month').range(f, t),
+      ),
+      fetchAll<BalanceAdjustmentRow>((f, t) =>
+        supabase
+          .from('balance_adjustments')
+          .select(ADJUSTMENT_COLS)
+          .order('occurred_at')
+          .range(f, t),
+      ).catch(() => [] as BalanceAdjustmentRow[]), // table missing until migration 0002 is run
+    ],
+  );
   return {
     app: BACKUP_APP,
     version: BACKUP_VERSION,
@@ -37,6 +59,7 @@ export async function exportBackup() {
     positions: positions.map(strip),
     fills: fills.map(strip),
     month_snapshots,
+    balance_adjustments: balance_adjustments.map(strip),
   };
 }
 
@@ -59,7 +82,11 @@ export async function importBackup(b: Backup) {
   for (const rows of chunks(b.month_snapshots)) {
     unwrap(await supabase.from('month_snapshots').upsert(rows, { onConflict: 'user_id,month' }));
   }
+  for (const rows of chunks(b.balance_adjustments)) {
+    unwrap(await supabase.from('balance_adjustments').upsert(rows, { onConflict: 'id' }));
+  }
   return {
+    balance_adjustments: b.balance_adjustments.length,
     capital_flows: b.capital_flows.length,
     positions: b.positions.length,
     fills: b.fills.length,

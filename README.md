@@ -21,6 +21,13 @@ Live: https://dev-abdulw.github.io/crypto-trade-tracker/
 - A month's P&L counts the **sells made that month**. The month return is time-weighted
   (Modified Dietz), so a mid-month deposit doesn't inflate it; the simple `pnl / start capital`
   is shown too.
+- **Balance adjustments** (Dashboard → Portfolio value → Edit, or Capital → Adjust balance) fix
+  differences with the real Binance balance (missed fees, a mis-logged trade). You type the real
+  total or free USDT; the difference is recorded as a gain or loss, e.g. 1000 → 1001 is +1
+  (+0.1%). Unlike deposits and withdrawals they count toward P&L and returns.
+- Two open positions in the same coin can be **merged** into one (fills combine, average entry is
+  recalculated). New trade offers to add to an open position in that coin instead of opening
+  another.
 - After a month ends, the app saves that month's unrealized P&L and portfolio value once, at
   CoinGecko's month-close price, so it doesn't change later.
 
@@ -53,7 +60,8 @@ rows. **Never** put the `service_role` / secret key in this repo or in the app.
 ### Supabase
 
 1. Create a project at supabase.com (free tier).
-2. SQL Editor → paste `supabase/migrations/0001_init.sql` → Run.
+2. SQL Editor → paste `supabase/migrations/0001_init.sql` → Run, then the same for
+   `0002_balance_adjustments.sql`.
 3. Start the app, choose **Create the owner account**, and sign in.
 4. **Turn off new sign-ups** so nobody else can register: Authentication → Sign In / Providers →
    disable **Allow new users to sign up**.

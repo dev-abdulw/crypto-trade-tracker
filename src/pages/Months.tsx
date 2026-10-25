@@ -16,14 +16,14 @@ export default function Months() {
   const reports = useMemo(() => {
     if (!data?.firstActivity) return [];
     return monthKeysBetween(data.firstActivity, new Date()).map((key) =>
-      buildMonthlyReport(key, data.flows, data.reportPositions),
+      buildMonthlyReport(key, data.flows, data.reportPositions, data.adjustments),
     );
   }, [data]);
 
   const chart = reports.slice(-12).map((r) => ({
     key: r.month,
     label: format(r.start, 'MMM'),
-    pnl: r.realizedPnl.toNumber(),
+    pnl: r.pnl.toNumber(),
   }));
 
   return (
@@ -42,7 +42,7 @@ export default function Months() {
       {reports.length > 0 && (
         <div className="space-y-4">
           <Card>
-            <h2 className="text-sm font-medium mb-3">Realized P&L, last 12 months</h2>
+            <h2 className="text-sm font-medium mb-3">P&L, last 12 months</h2>
             <PnlBars
               data={chart}
               label="Realized profit or loss per month"
@@ -60,9 +60,9 @@ export default function Months() {
             </div>
             <ul className="divide-y divide-border">
               {[...reports].reverse().map((r) => {
-                const tone = r.realizedPnl.gt(0)
+                const tone = r.pnl.gt(0)
                   ? 'border-l-profit'
-                  : r.realizedPnl.lt(0)
+                  : r.pnl.lt(0)
                     ? 'border-l-loss'
                     : 'border-l-transparent';
                 return (
@@ -74,7 +74,7 @@ export default function Months() {
                       <span className="font-medium">
                         {format(monthStart(r.month), 'MMMM yyyy')}
                       </span>
-                      <Pnl value={r.realizedPnl} className="text-right" />
+                      <Pnl value={r.pnl} className="text-right" />
                       <span className="text-right text-muted">{formatPct(r.returnPct)}</span>
                       <span className="hidden sm:block text-right">{r.closedCount}</span>
                       <span className="hidden sm:block text-right text-muted">

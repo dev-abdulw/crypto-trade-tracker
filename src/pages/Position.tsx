@@ -16,6 +16,7 @@ import {
   useClosePosition,
   useDeleteFill,
   useDeletePosition,
+  useMergePositions,
   useReopenPosition,
   useSaveFill,
   useUpdatePositionDetails,
@@ -24,7 +25,8 @@ import {
 } from '../data/trades';
 import { useLivePortfolio } from '../data/prices';
 import PriceStatus from '../components/PriceStatus';
-import { formatDateTime, formatDuration } from '../lib/dates';
+import { formatDate, formatDateTime, formatDuration } from '../lib/dates';
+import { canMerge } from '../lib/merge';
 import { parseDecimal } from '../lib/fillMath';
 import {
   d,
@@ -230,6 +232,7 @@ export default function Position() {
   const closePosition = useClosePosition();
   const reopenPosition = useReopenPosition();
   const deletePosition = useDeletePosition();
+  const mergePositions = useMergePositions();
   const [dialog, setDialog] = useState<Dialog>(null);
 
   if (portfolio.isLoading)
@@ -327,6 +330,37 @@ export default function Position() {
       </div>
 
       <ErrorText error={closePosition.error ?? reopenPosition.error ?? deletePosition.error} />
+      {(portfolio.data ?? [])
+        .filter((o) => canMerge(row, o.row))
+        .map((o) => (
+          <div
+            key={o.row.id}
+            className="flex flex-wrap items-center gap-3 rounded-md border border-accent/40 bg-accent/5 p-3 text-sm"
+          >
+            <span className="flex-1">
+              You have another open {row.symbol} position (opened {formatDate(o.row.opened_at)}
+              {o.summary && `, ${formatQty(o.summary.remainingQty)} ${row.symbol}`}). Merge them
+              into one with a combined average entry?
+            </span>
+            <Button
+              variant="primary"
+              disabled={mergePositions.isPending}
+              onClick={async () => {
+                const ok = confirm(
+                  `Merge the two ${row.symbol} positions? All fills move into the older one and ` +
+                    'the average entry is recalculated. Notes and plans are combined.',
+                );
+                if (!ok) return;
+                const keptId = await mergePositions.mutateAsync({ aId: row.id, bId: o.row.id });
+                if (keptId !== row.id) navigate(`/trades/${keptId}`, { replace: true });
+              }}
+            >
+              {mergePositions.isPending ? 'Merging…' : 'Merge'}
+            </Button>
+          </div>
+        ))}
+      <ErrorText error={mergePositions.error} />
+
       {view.error && (
         <p className="rounded-md border border-loss/40 bg-loss/10 p-3 text-sm text-loss">
           {view.error} Edit or delete a fill below to fix it.

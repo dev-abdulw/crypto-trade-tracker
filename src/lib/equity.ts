@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { d, ZERO, type Decimal } from './money';
-import { toDate, type CapitalFlowInput, type PositionSummary } from './pnl';
+import { toDate, type AdjustmentInput, type CapitalFlowInput, type PositionSummary } from './pnl';
 
 // Equity curve: capital (net invested + realized P&L) over time, one point per active day.
 
@@ -17,6 +17,7 @@ export interface EquityPoint {
 export function equitySeries(
   flows: readonly CapitalFlowInput[],
   positions: readonly PositionSummary[],
+  adjustments: readonly AdjustmentInput[] = [],
 ): EquityPoint[] {
   type Event = { at: Date; isFlow: boolean; flow: Decimal; pnl: Decimal };
   const events: Event[] = [
@@ -29,6 +30,12 @@ export function equitySeries(
     ...positions.flatMap((p) =>
       p.realizations.map((r) => ({ at: r.at, isFlow: false, flow: ZERO, pnl: r.realizedPnl })),
     ),
+    ...adjustments.map((a) => ({
+      at: toDate(a.occurred_at),
+      isFlow: false,
+      flow: ZERO,
+      pnl: d(a.amount_usdt),
+    })),
   ].sort((a, b) => a.at.getTime() - b.at.getTime() || Number(b.isFlow) - Number(a.isFlow));
 
   const points: EquityPoint[] = [];

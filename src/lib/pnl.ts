@@ -22,6 +22,12 @@ export interface CapitalFlowInput {
   occurred_at: string | Date;
 }
 
+/** Manual correction to the balance: + counts as a gain, − as a loss (not a deposit/withdrawal). */
+export interface AdjustmentInput {
+  amount_usdt: Value;
+  occurred_at: string | Date;
+}
+
 export interface DustOptions {
   /** Remaining holdings worth less than this (USDT) count as dust. */
   minValueUsdt?: Value;
@@ -354,6 +360,8 @@ export interface AccountSummary {
   withdrawals: Decimal;
   netInvested: Decimal;
   realizedTotal: Decimal;
+  /** Σ balance adjustments (signed). */
+  adjustmentsTotal: Decimal;
   capital: Decimal;
   openCost: Decimal;
   cashUsdt: Decimal;
@@ -378,12 +386,14 @@ export function netFlows(flows: readonly CapitalFlowInput[], before?: Date): Dec
 export function computeAccount(
   flows: readonly CapitalFlowInput[],
   positions: readonly PositionSummary[],
+  adjustments: readonly AdjustmentInput[] = [],
 ): AccountSummary {
   const deposits = sum(flows.filter((f) => f.type === 'deposit').map((f) => f.amount_usdt));
   const withdrawals = sum(flows.filter((f) => f.type === 'withdrawal').map((f) => f.amount_usdt));
   const netInvested = deposits.minus(withdrawals);
   const realizedTotal = sum(positions.map((p) => p.realizedPnl));
-  const capital = netInvested.plus(realizedTotal);
+  const adjustmentsTotal = sum(adjustments.map((a) => a.amount_usdt));
+  const capital = netInvested.plus(realizedTotal).plus(adjustmentsTotal);
 
   const open = positions.filter((p) => p.status === 'open' && p.remainingQty.gt(0));
   const openCost = sum(open.map((p) => p.openCost));
@@ -405,6 +415,7 @@ export function computeAccount(
     withdrawals,
     netInvested,
     realizedTotal,
+    adjustmentsTotal,
     capital,
     openCost,
     cashUsdt,

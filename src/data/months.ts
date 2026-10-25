@@ -11,7 +11,8 @@ import {
   type SnapshotPositionInput,
 } from '../lib/snapshot';
 import { supabase } from '../lib/supabase';
-import type { MonthSnapshotRow } from '../lib/types';
+import type { BalanceAdjustmentRow, MonthSnapshotRow } from '../lib/types';
+import { useAdjustments } from './adjustments';
 import { useCapitalFlows } from './capital';
 import { fetchAll, unwrap } from './db';
 import { useLivePortfolio } from './prices';
@@ -75,37 +76,47 @@ function toSnapshotInputs(views: PositionView[]): SnapshotPositionInput[] {
 export function useOverview() {
   const portfolio = useLivePortfolio();
   const flows = useCapitalFlows();
+  const adjustmentsQuery = useAdjustments();
   const snapshots = useSnapshots();
+  // If the adjustments table is missing (migration 0002 not run yet) carry on without it.
+  const adjustments =
+    adjustmentsQuery.data ?? (adjustmentsQuery.error ? NO_ADJUSTMENTS : undefined);
 
   const data = useMemo(() => {
-    if (!portfolio.data || !flows.data) return undefined;
+    if (!portfolio.data || !flows.data || !adjustments) return undefined;
     const views = portfolio.data;
     const reportPositions = toReportPositions(views);
     const times = [
       ...flows.data.map((f) => new Date(f.occurred_at).getTime()),
+      ...adjustments.map((a) => new Date(a.occurred_at).getTime()),
       ...views.flatMap((v) => v.fills.map((f) => new Date(f.executed_at).getTime())),
     ];
     return {
       views,
       flows: flows.data,
+      adjustments,
       reportPositions,
       account: computeAccount(
         flows.data,
         reportPositions.map((p) => p.summary),
+        adjustments,
       ),
       firstActivity: times.length ? new Date(Math.min(...times)) : null,
     };
-  }, [portfolio.data, flows.data]);
+  }, [portfolio.data, flows.data, adjustments]);
 
   return {
     data,
     snapshots: useMemo(() => byMonth(snapshots.data), [snapshots.data]),
     snapshotsLoaded: snapshots.isSuccess,
     prices: portfolio.prices,
-    isLoading: portfolio.isLoading || flows.isLoading,
+    adjustmentsError: adjustmentsQuery.error,
+    isLoading: portfolio.isLoading || flows.isLoading || adjustmentsQuery.isLoading,
     error: portfolio.error ?? flows.error ?? snapshots.error,
   };
 }
+
+const NO_ADJUSTMENTS: BalanceAdjustmentRow[] = [];
 
 let snapshotRun: Promise<void> | null = null;
 
@@ -133,7 +144,14 @@ export function useEnsureSnapshots() {
           const price = await fetchHistoricalPrice(id, monthClosePriceDate(key)).catch(() => null);
           prices[id] = price ?? undefined;
         }
-        const values = buildMonthSnapshot(key, data.flows, data.reportPositions, holdings, prices);
+        const values = buildMonthSnapshot(
+          key,
+          data.flows,
+          data.reportPositions,
+          holdings,
+          prices,
+          data.adjustments,
+        );
         const { error } = await supabase
           .from('month_snapshots')
           .upsert(values, { onConflict: 'user_id,month' });

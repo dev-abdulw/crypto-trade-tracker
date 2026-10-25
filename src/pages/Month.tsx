@@ -74,7 +74,10 @@ export default function Month() {
   const snapshot = overview.snapshots.get(month);
 
   const report = useMemo(
-    () => (data && valid ? buildMonthlyReport(month, data.flows, data.reportPositions) : null),
+    () =>
+      data && valid
+        ? buildMonthlyReport(month, data.flows, data.reportPositions, data.adjustments)
+        : null,
     [data, month, valid],
   );
 
@@ -119,8 +122,14 @@ export default function Month() {
       {report && (
         <>
           <Card className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Stat label="Realized P&L">
-              <Pnl value={report.realizedPnl} className="text-lg" />
+            <Stat label="P&L">
+              <Pnl value={report.pnl} className="text-lg" />
+              {!report.adjustmentsPnl.isZero() && (
+                <div className="text-xs font-normal text-muted">
+                  trades <Pnl value={report.realizedPnl} /> · adjustments{' '}
+                  <Pnl value={report.adjustmentsPnl} />
+                </div>
+              )}
             </Stat>
             <Stat label="Return (time-weighted)">
               {formatPct(report.returnPct)}

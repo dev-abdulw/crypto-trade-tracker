@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import { planMerge } from '../lib/merge';
 import type { PositionSummary } from '../lib/pnl';
 import { positionPatch, summarize } from '../lib/positionSync';
 import { dustOptions, type AppSettings } from '../lib/settings';
@@ -253,6 +254,42 @@ export function useReopenPosition() {
       unwrap(await supabase.from('positions').update(reopened).eq('id', id));
       const { row, fills } = await loadPosition(id);
       await syncPosition(row, fills);
+    },
+    onSettled: () => invalidateTrades(qc),
+  });
+}
+
+/**
+ * Merges two open positions in the same coin: the newer one's fills move into the older one,
+ * then the newer (now empty) position is deleted. Returns the id of the position kept.
+ */
+export function useMergePositions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ aId, bId }: { aId: string; bId: string }) => {
+      const [a, b] = await Promise.all([loadPosition(aId), loadPosition(bId)]);
+      const plan = planMerge(a.row, b.row);
+      const [keep, other] = plan.keepId === a.row.id ? [a, b] : [b, a];
+      const keepRow = { ...keep.row, ...plan.patch };
+      const merged = [
+        ...keep.fills,
+        ...other.fills.map((f) => ({ ...f, position_id: keep.row.id })),
+      ];
+      summarize(keepRow, merged); // throws before anything is written if the result is invalid
+
+      // Move fills first: if a later step fails, the other position is just left empty.
+      unwrap(
+        await supabase
+          .from('fills')
+          .update({ position_id: keep.row.id })
+          .eq('position_id', other.row.id),
+      );
+      if (Object.keys(plan.patch).length > 0) {
+        unwrap(await supabase.from('positions').update(plan.patch).eq('id', keep.row.id));
+      }
+      unwrap(await supabase.from('positions').delete().eq('id', other.row.id));
+      await syncPosition(keepRow, merged);
+      return keep.row.id;
     },
     onSettled: () => invalidateTrades(qc),
   });

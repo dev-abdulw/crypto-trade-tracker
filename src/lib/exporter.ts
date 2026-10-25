@@ -63,6 +63,14 @@ const fill = z.object({
   binance_trade_id: z.string().nullable().optional(),
 });
 
+const balanceAdjustment = z.object({
+  id: z.string().uuid(),
+  amount_usdt: numeric,
+  basis_usdt: numeric.nullable().optional(),
+  occurred_at: ts,
+  note: z.string().nullable().optional(),
+});
+
 const monthSnapshot = z.object({
   month: z.string().regex(/^\d{4}-\d{2}-01$/),
   start_capital: numeric.nullable().optional(),
@@ -82,6 +90,8 @@ export const backupSchema = z
     positions: z.array(position),
     fills: z.array(fill),
     month_snapshots: z.array(monthSnapshot),
+    // Added after the first release; older backups simply have none.
+    balance_adjustments: z.array(balanceAdjustment).default([]),
   })
   .superRefine((b, ctx) => {
     const ids = new Set(b.positions.map((p) => p.id));

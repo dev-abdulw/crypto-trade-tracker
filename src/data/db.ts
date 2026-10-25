@@ -32,3 +32,6 @@ export async function fetchAll<T>(
     if (batch.length < PAGE) return rows;
   }
 }
+
+export const ADJUSTMENT_COLS =
+  'id,user_id,amount_usdt::text,basis_usdt::text,occurred_at,note,created_at,updated_at';

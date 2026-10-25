@@ -41,6 +41,14 @@ export default function Trades() {
 
   const all = useMemo(() => portfolio.data ?? [], [portfolio.data]);
   const coins = useMemo(() => [...new Set(all.map((v) => v.row.symbol))].sort(), [all]);
+  const duplicateOpen = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const v of all) {
+      if (v.row.status === 'open')
+        counts.set(v.row.coingecko_id, (counts.get(v.row.coingecko_id) ?? 0) + 1);
+    }
+    return new Set([...counts].filter(([, n]) => n > 1).map(([id]) => id));
+  }, [all]);
   const months = useMemo(() => [...new Set(all.map(positionMonth))].sort().reverse(), [all]);
 
   const q = search.trim().toUpperCase();
@@ -201,6 +209,9 @@ export default function Trades() {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{row.symbol}</span>
                   <StatusBadge status={row.status} />
+                  {row.status === 'open' && duplicateOpen.has(row.coingecko_id) && (
+                    <span className="text-xs text-accent">can merge</span>
+                  )}
                   {row.setup && <span className="text-xs text-muted truncate">{row.setup}</span>}
                 </div>
                 <div className="text-xs text-muted mt-0.5">
