@@ -114,7 +114,7 @@ export default function Month() {
       </div>
 
       <ErrorText error={overview.error} />
-      {!report && <p className="text-sm text-muted">Loading…</p>}
+      {!report && <div className="h-48 animate-pulse rounded-xl bg-card" />}
 
       {report && (
         <>

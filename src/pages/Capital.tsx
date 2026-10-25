@@ -172,7 +172,7 @@ export default function Capital() {
         )}
 
         <Card className="p-0">
-          {flows.isLoading && <p className="p-4 text-sm text-muted">Loading…</p>}
+          {flows.isLoading && <div className="m-4 h-12 animate-pulse rounded bg-surface" />}
           <ErrorText error={flows.error} />
           {flows.data?.length === 0 && (
             <p className="p-4 text-sm text-muted">

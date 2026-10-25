@@ -30,7 +30,7 @@ export default function Months() {
     <>
       <PageHeader title="Monthly" />
       <ErrorText error={overview.error} />
-      {overview.isLoading && <p className="text-sm text-muted">Loading…</p>}
+      {overview.isLoading && <div className="h-48 animate-pulse rounded-xl bg-card" />}
       {data && reports.length === 0 && (
         <Card>
           <p className="text-sm text-muted">

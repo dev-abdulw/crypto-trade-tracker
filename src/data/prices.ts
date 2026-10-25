@@ -13,6 +13,7 @@ export function usePrices(ids: readonly string[]) {
   const key = useMemo(() => [...new Set(ids)].sort(), [ids]);
   const query = useQuery({
     queryKey: ['prices', key],
+    meta: { silent: true },
     queryFn: ({ signal }) => fetchPrices(key, signal),
     enabled: key.length > 0,
     staleTime: PRICE_TTL,

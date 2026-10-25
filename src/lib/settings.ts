@@ -1,6 +1,6 @@
 import type { DustOptions } from './pnl';
 
-// Per-device preferences kept in localStorage (a full Settings screen comes in phase 8).
+// Per-device preferences kept in localStorage.
 
 export interface AppSettings {
   /** Remaining holdings worth less than this (USDT) auto-close a position. */
@@ -39,12 +39,24 @@ function writeJson(key: string, value: unknown) {
   }
 }
 
+let cached: AppSettings | null = null;
+const listeners = new Set<() => void>();
+
+/** Current settings; the same object is returned until they change. */
 export function getSettings(): AppSettings {
-  return { ...DEFAULT_SETTINGS, ...readJson<Partial<AppSettings>>(SETTINGS_KEY) };
+  cached ??= { ...DEFAULT_SETTINGS, ...readJson<Partial<AppSettings>>(SETTINGS_KEY) };
+  return cached;
 }
 
 export function saveSettings(settings: AppSettings) {
   writeJson(SETTINGS_KEY, settings);
+  cached = { ...settings };
+  listeners.forEach((l) => l());
+}
+
+export function subscribeSettings(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 export function dustOptions(settings: AppSettings = getSettings()): DustOptions {

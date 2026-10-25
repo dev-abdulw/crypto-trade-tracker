@@ -27,6 +27,7 @@ export default function CoinPicker({
   const recent = getRecentCoins();
   const search = useQuery({
     queryKey: ['coin-search', q],
+    meta: { silent: true },
     queryFn: ({ signal }) => searchCoins(q, signal),
     enabled: q.length >= 2,
     staleTime: 10 * 60_000,

@@ -232,7 +232,14 @@ export default function Position() {
   const deletePosition = useDeletePosition();
   const [dialog, setDialog] = useState<Dialog>(null);
 
-  if (portfolio.isLoading) return <p className="text-muted text-sm">Loading…</p>;
+  if (portfolio.isLoading)
+    return (
+      <div className="space-y-3">
+        <div className="h-7 w-48 animate-pulse rounded bg-card" />
+        <div className="h-28 animate-pulse rounded-xl bg-card" />
+        <div className="h-48 animate-pulse rounded-xl bg-card" />
+      </div>
+    );
   if (portfolio.error) return <ErrorText error={portfolio.error} />;
   const view = portfolio.data?.find((p) => p.row.id === id);
   if (!view) {

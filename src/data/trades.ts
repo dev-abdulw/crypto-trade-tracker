@@ -2,10 +2,11 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { useMemo } from 'react';
 import type { PositionSummary } from '../lib/pnl';
 import { positionPatch, summarize } from '../lib/positionSync';
-import { dustOptions } from '../lib/settings';
+import { dustOptions, type AppSettings } from '../lib/settings';
 import { supabase } from '../lib/supabase';
 import type { FillRow, Insert, PositionRow } from '../lib/types';
 import { fetchAll, FILL_COLS, POSITION_COLS, unwrap } from './db';
+import { useSettings } from './settings';
 
 export const tradeKeys = {
   positions: ['positions'] as const,
@@ -66,12 +67,13 @@ export function buildPositionView(
   row: PositionRow,
   fills: FillRow[],
   livePrice?: number | string | null,
+  settings?: AppSettings,
 ): PositionView {
   try {
     return {
       row,
       fills,
-      summary: summarize(row, fills, { livePrice, dust: dustOptions() }),
+      summary: summarize(row, fills, { livePrice, dust: dustOptions(settings) }),
       error: null,
     };
   } catch (e) {
@@ -83,6 +85,7 @@ export function buildPositionView(
 export function usePortfolio(prices?: Record<string, number | undefined>) {
   const positions = usePositions();
   const fills = useFills();
+  const settings = useSettings();
 
   const data = useMemo(() => {
     if (!positions.data || !fills.data) return undefined;
@@ -93,9 +96,9 @@ export function usePortfolio(prices?: Record<string, number | undefined>) {
       else byPosition.set(f.position_id, [f]);
     }
     return positions.data.map((row) =>
-      buildPositionView(row, byPosition.get(row.id) ?? [], prices?.[row.coingecko_id]),
+      buildPositionView(row, byPosition.get(row.id) ?? [], prices?.[row.coingecko_id], settings),
     );
-  }, [positions.data, fills.data, prices]);
+  }, [positions.data, fills.data, prices, settings]);
 
   return {
     data,

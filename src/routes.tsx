@@ -1,15 +1,27 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import RequireAuth from './auth/RequireAuth';
 import Layout from './components/Layout';
-import Capital from './pages/Capital';
-import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
-import Month from './pages/Month';
-import Months from './pages/Months';
-import NewTrade from './pages/NewTrade';
-import Position from './pages/Position';
-import Settings from './pages/Settings';
-import Trades from './pages/Trades';
+
+// Pages are split into their own chunks; charts (Recharts) only load where they are used.
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Trades = lazy(() => import('./pages/Trades'));
+const NewTrade = lazy(() => import('./pages/NewTrade'));
+const Position = lazy(() => import('./pages/Position'));
+const Months = lazy(() => import('./pages/Months'));
+const Month = lazy(() => import('./pages/Month'));
+const Capital = lazy(() => import('./pages/Capital'));
+const Settings = lazy(() => import('./pages/Settings'));
+
+function PageFallback() {
+  return (
+    <div className="space-y-3">
+      <div className="h-7 w-40 animate-pulse rounded bg-card" />
+      <div className="h-32 animate-pulse rounded-xl bg-card" />
+    </div>
+  );
+}
 
 export default function AppRoutes() {
   return (
@@ -22,14 +34,28 @@ export default function AppRoutes() {
           </RequireAuth>
         }
       >
-        <Route index element={<Dashboard />} />
-        <Route path="trades" element={<Trades />} />
-        <Route path="trades/new" element={<NewTrade />} />
-        <Route path="trades/:id" element={<Position />} />
-        <Route path="months" element={<Months />} />
-        <Route path="months/:month" element={<Month />} />
-        <Route path="capital" element={<Capital />} />
-        <Route path="settings" element={<Settings />} />
+        {(
+          [
+            ['', Dashboard],
+            ['trades', Trades],
+            ['trades/new', NewTrade],
+            ['trades/:id', Position],
+            ['months', Months],
+            ['months/:month', Month],
+            ['capital', Capital],
+            ['settings', Settings],
+          ] as const
+        ).map(([path, Page]) => (
+          <Route
+            key={path || 'index'}
+            {...(path ? { path } : { index: true })}
+            element={
+              <Suspense fallback={<PageFallback />}>
+                <Page />
+              </Suspense>
+            }
+          />
+        ))}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
