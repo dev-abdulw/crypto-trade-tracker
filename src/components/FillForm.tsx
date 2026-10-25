@@ -2,7 +2,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import Decimal from 'decimal.js';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { usePrices } from '../data/prices';
 import type { FillDraft } from '../data/trades';
+import { BNB_ID } from '../lib/coingecko';
 import { fromLocalInput, toLocalInput } from '../lib/dates';
 import { estimateFee, feeToUsdt, parseDecimal, qtyFromAmount } from '../lib/fillMath';
 import { d, formatQty, formatUsdt } from '../lib/money';
@@ -40,6 +42,8 @@ const schema = z
   });
 
 type FormValues = z.infer<typeof schema>;
+
+const NO_IDS: string[] = [];
 
 interface Props {
   side: 'buy' | 'sell';
@@ -85,6 +89,7 @@ export default function FillForm(props: Props) {
   } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: initialValues(props) });
 
   const v = watch();
+  const bnbLive = usePrices(v.feeAsset === 'BNB' ? [BNB_ID] : NO_IDS).data?.[BNB_ID];
   const price = parseDecimal(v.price);
   const qty =
     v.mode === 'qty'
@@ -250,7 +255,19 @@ export default function FillForm(props: Props) {
         <Field
           label="BNB price (USDT)"
           error={errors.bnbPrice?.message}
-          hint="Used to convert the fee to USDT"
+          hint={
+            bnbLive ? (
+              <button
+                type="button"
+                className="underline decoration-dotted"
+                onClick={() => setValue('bnbPrice', String(bnbLive), { shouldValidate: true })}
+              >
+                use live price {bnbLive}
+              </button>
+            ) : (
+              'Used to convert the fee to USDT'
+            )
+          }
         >
           <input inputMode="decimal" className={inputClass} {...register('bnbPrice')} />
         </Field>

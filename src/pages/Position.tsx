@@ -16,16 +16,25 @@ import {
   useClosePosition,
   useDeleteFill,
   useDeletePosition,
-  usePortfolio,
   useReopenPosition,
   useSaveFill,
   useUpdatePositionDetails,
   type FillDraft,
   type PositionView,
 } from '../data/trades';
+import { useLivePortfolio } from '../data/prices';
+import PriceStatus from '../components/PriceStatus';
 import { formatDateTime, formatDuration } from '../lib/dates';
 import { parseDecimal } from '../lib/fillMath';
-import { d, formatPrice, formatQty, formatUsdt } from '../lib/money';
+import {
+  d,
+  formatPct,
+  formatPrice,
+  formatQty,
+  formatUsdt,
+  safeDiv,
+  type Value,
+} from '../lib/money';
 import { sortFills } from '../lib/pnl';
 import type { FillRow, PositionRow } from '../lib/types';
 
@@ -216,7 +225,7 @@ function Timeline({ view, onEdit }: { view: PositionView; onEdit: (f: FillRow) =
 export default function Position() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const portfolio = usePortfolio();
+  const portfolio = useLivePortfolio();
   const saveFill = useSaveFill();
   const closePosition = useClosePosition();
   const reopenPosition = useReopenPosition();
@@ -244,7 +253,14 @@ export default function Position() {
     close();
   };
   const lastFill = view.fills[view.fills.length - 1];
-  const lastPrice = lastFill ? d(lastFill.price_usdt).toFixed() : undefined;
+  const live = summary?.livePrice ?? null;
+  const lastPrice = live
+    ? live.toSignificantDigits(8).toFixed()
+    : lastFill
+      ? d(lastFill.price_usdt).toFixed()
+      : undefined;
+  const distance = (target: Value | null) =>
+    target && live ? safeDiv(d(target).minus(live), live) : null;
   const canTrade = row.status === 'open';
   const remaining = summary?.remainingQty;
 
@@ -310,6 +326,21 @@ export default function Position() {
         </p>
       )}
 
+      {summary && row.status === 'open' && (
+        <Card className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Stat label="Live price">{live ? formatPrice(live) : '—'}</Stat>
+          <Stat label="Market value">
+            {summary.marketValue ? `${formatUsdt(summary.marketValue)} USDT` : '—'}
+          </Stat>
+          <Stat label="Unrealized P&L">
+            <Pnl value={summary.unrealizedPnl} pct={summary.unrealizedPct} />
+          </Stat>
+          <div className="flex items-end">
+            <PriceStatus prices={portfolio.prices} />
+          </div>
+        </Card>
+      )}
+
       {summary && (
         <Card className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Stat label="Holding">
@@ -346,10 +377,22 @@ export default function Position() {
         <span>
           <span className="text-muted">Target </span>
           {row.target_price ? formatPrice(row.target_price) : '—'}
+          {distance(row.target_price) && (
+            <span className="text-xs text-muted">
+              {' '}
+              ({formatPct(distance(row.target_price))} away)
+            </span>
+          )}
         </span>
         <span>
           <span className="text-muted">Stop </span>
           {row.stop_price ? formatPrice(row.stop_price) : '—'}
+          {distance(row.stop_price) && (
+            <span className="text-xs text-muted">
+              {' '}
+              ({formatPct(distance(row.stop_price))} away)
+            </span>
+          )}
         </span>
         <span>
           <span className="text-muted">Setup </span>

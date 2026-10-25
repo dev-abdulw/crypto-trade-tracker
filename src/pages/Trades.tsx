@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import { Card, ErrorText, Pnl, StatusBadge } from '../components/ui';
-import { usePortfolio } from '../data/trades';
+import PriceStatus from '../components/PriceStatus';
+import { useLivePortfolio } from '../data/prices';
 import { formatDate, formatDuration } from '../lib/dates';
 import { formatPrice, formatQty } from '../lib/money';
 
 type StatusFilter = 'all' | 'open' | 'closed';
 
 export default function Trades() {
-  const portfolio = usePortfolio();
+  const portfolio = useLivePortfolio();
   const [status, setStatus] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
 
@@ -53,6 +54,9 @@ export default function Trades() {
         />
       </div>
 
+      <div className="mb-2 flex justify-end">
+        <PriceStatus prices={portfolio.prices} />
+      </div>
       {portfolio.isLoading && <p className="text-sm text-muted">Loading…</p>}
       <ErrorText error={portfolio.error} />
       {portfolio.data && rows.length === 0 && (
@@ -90,12 +94,21 @@ export default function Trades() {
                 {error ? (
                   <span className="text-loss text-xs">needs fixing</span>
                 ) : (
-                  summary &&
-                  (summary.costOfSold.gt(0) ? (
-                    <Pnl value={summary.realizedPnl} pct={summary.pnlPct} />
-                  ) : (
-                    <span className="text-muted">—</span>
-                  ))
+                  summary && (
+                    <>
+                      {summary.costOfSold.gt(0) ? (
+                        <Pnl value={summary.realizedPnl} pct={summary.pnlPct} />
+                      ) : (
+                        row.status === 'closed' && <span className="text-muted">—</span>
+                      )}
+                      {summary.unrealizedPnl && (
+                        <div className="text-xs">
+                          <span className="text-muted">open </span>
+                          <Pnl value={summary.unrealizedPnl} pct={summary.unrealizedPct} />
+                        </div>
+                      )}
+                    </>
+                  )
                 )}
               </div>
             </Link>
