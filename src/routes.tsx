@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import RequireAuth from './auth/RequireAuth';
 import Layout from './components/Layout';
 import Capital from './pages/Capital';
 import Dashboard from './pages/Dashboard';
@@ -14,7 +15,13 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route element={<Layout />}>
+      <Route
+        element={
+          <RequireAuth>
+            <Layout />
+          </RequireAuth>
+        }
+      >
         <Route index element={<Dashboard />} />
         <Route path="trades" element={<Trades />} />
         <Route path="trades/new" element={<NewTrade />} />
