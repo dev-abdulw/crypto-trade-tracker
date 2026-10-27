@@ -8,7 +8,6 @@ import { useDeleteMeezanEntry, useMeezanEntries } from '../data/meezan';
 import { formatDateTime } from '../lib/dates';
 import { parseDecimal } from '../lib/fillMath';
 import {
-  afterTax,
   combinedDailyRate,
   MEEZAN_OWNERS,
   ownerLabel,
@@ -446,8 +445,6 @@ export default function Meezan() {
 
   const rates = totals.avgDaily ? ratesFromDaily(totals.avgDaily) : null;
   const latestRates = totals.latestDaily ? ratesFromDaily(totals.latestDaily) : null;
-  const monthProfit = rates ? totals.value.times(rates.monthly) : null;
-  const yearProfit = rates ? totals.value.times(rates.yearly) : null;
   const missingTable = entries.error && /meezan_entries/.test(entries.error.message);
   const familyValue = sum(holdings.map((h) => h.summary.currentValue));
 
@@ -553,40 +550,6 @@ export default function Meezan() {
                     Latest update period: {formatPct(latestRates.yearly, { sign: false })} a year
                   </p>
                 )}
-                <div className="mt-4 overflow-x-auto">
-                  <table className="w-full text-sm tabular-nums">
-                    <thead className="text-xs text-muted">
-                      <tr className="text-left">
-                        <th className="py-1 pr-3 font-normal">On {formatRs(totals.value)}</th>
-                        <th className="py-1 px-2 font-normal text-right">Profit</th>
-                        <th className="py-1 px-2 font-normal text-right">After 15% tax</th>
-                        <th className="py-1 pl-2 font-normal text-right">Value after</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {(
-                        [
-                          ['Per day', totals.value.times(rates.daily)],
-                          ['Per month', monthProfit!],
-                          ['Per year', yearProfit!],
-                        ] as const
-                      ).map(([label, p]) => (
-                        <tr key={label}>
-                          <td className="py-1.5 pr-3 text-muted">{label}</td>
-                          <td className="py-1.5 px-2 text-right">
-                            <Rs v={p} sign />
-                          </td>
-                          <td className="py-1.5 px-2 text-right">
-                            <Rs v={afterTax(p)} sign />
-                          </td>
-                          <td className="py-1.5 pl-2 text-right">
-                            {formatRs(totals.value.plus(afterTax(p)))}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               </>
             )}
           </Section>
