@@ -124,12 +124,6 @@ export default function Month() {
           <Card className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Stat label="P&L">
               <Pnl value={report.pnl} className="text-lg" />
-              {!report.adjustmentsPnl.isZero() && (
-                <div className="text-xs font-normal text-muted">
-                  trades <Pnl value={report.realizedPnl} /> · adjustments{' '}
-                  <Pnl value={report.adjustmentsPnl} />
-                </div>
-              )}
             </Stat>
             <Stat label="Return (time-weighted)">
               {formatPct(report.returnPct)}

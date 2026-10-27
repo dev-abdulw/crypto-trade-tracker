@@ -13,15 +13,13 @@ import {
 import { z } from 'zod';
 import AdjustBalanceForm from '../components/AdjustBalanceForm';
 import PageHeader from '../components/PageHeader';
-import { Button, Card, ErrorText, Field, inputClass, Modal, Pnl, Stat } from '../components/ui';
-import { useDeleteAdjustment } from '../data/adjustments';
+import { Button, Card, ErrorText, Field, inputClass, Modal, Stat } from '../components/ui';
 import { useCapitalFlows, useDeleteCapitalFlow, useSaveCapitalFlow } from '../data/capital';
 import { useOverview } from '../data/months';
-import { adjustmentPct } from '../lib/adjustments';
 import { formatDate, formatDateTime, fromLocalInput, toLocalInput } from '../lib/dates';
 import { parseDecimal } from '../lib/fillMath';
 import { d, formatUsdt, ZERO } from '../lib/money';
-import type { BalanceAdjustmentRow, CapitalFlowRow } from '../lib/types';
+import type { CapitalFlowRow } from '../lib/types';
 
 type FlowType = CapitalFlowRow['type'];
 
@@ -99,10 +97,8 @@ export default function Capital() {
   const del = useDeleteCapitalFlow();
   const [editing, setEditing] = useState<Editing>(null);
   const overview = useOverview();
-  const delAdjustment = useDeleteAdjustment();
-  const [adjusting, setAdjusting] = useState<{ row?: BalanceAdjustmentRow } | null>(null);
+  const [adjusting, setAdjusting] = useState(false);
   const account = overview.data?.account;
-  const adjustments = [...(overview.data?.adjustments ?? [])].reverse();
 
   const { deposits, withdrawals, chart } = useMemo(() => {
     let dep = ZERO;
@@ -125,8 +121,8 @@ export default function Capital() {
         title="Capital"
         actions={
           <div className="flex flex-wrap justify-end gap-2">
-            <Button disabled={!account} onClick={() => setAdjusting({})}>
-              Adjust balance
+            <Button disabled={!account} onClick={() => setAdjusting(true)}>
+              Edit balance
             </Button>
             <Button onClick={() => setEditing({ type: 'withdrawal' })}>Withdraw</Button>
             <Button variant="primary" onClick={() => setEditing({ type: 'deposit' })}>
@@ -137,13 +133,10 @@ export default function Capital() {
       />
 
       <div className="space-y-4">
-        <Card className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Card className="grid grid-cols-3 gap-4">
           <Stat label="Net invested">{formatUsdt(deposits.minus(withdrawals))}</Stat>
           <Stat label="Deposits">{formatUsdt(deposits)}</Stat>
           <Stat label="Withdrawals">{formatUsdt(withdrawals)}</Stat>
-          <Stat label="Balance adjustments">
-            {account ? <Pnl value={account.adjustmentsTotal} /> : '—'}
-          </Stat>
         </Card>
 
         {overview.adjustmentsError && (
@@ -235,58 +228,14 @@ export default function Capital() {
           </ul>
           <ErrorText error={del.error} />
         </Card>
-
-        {adjustments.length > 0 && (
-          <Card className="p-0">
-            <h2 className="text-sm font-medium px-4 pt-4 pb-1">Balance adjustments</h2>
-            <p className="px-4 pb-2 text-xs text-muted">
-              Corrections to match Binance. They count as gains or losses, not as money invested.
-            </p>
-            <ul className="divide-y divide-border">
-              {adjustments.map((a) => (
-                <li key={a.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="flex-1 min-w-0">
-                    <Pnl
-                      value={a.amount_usdt}
-                      pct={adjustmentPct(a.amount_usdt, a.basis_usdt)}
-                      className="font-medium tabular-nums"
-                    />
-                    <div className="text-xs text-muted truncate">
-                      {formatDateTime(a.occurred_at)}
-                      {a.note && ` · ${a.note}`}
-                    </div>
-                  </div>
-                  <Button variant="ghost" onClick={() => setAdjusting({ row: a })}>
-                    Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={delAdjustment.isPending}
-                    onClick={() => {
-                      if (confirm('Delete this adjustment?')) delAdjustment.mutate(a.id);
-                    }}
-                  >
-                    Delete
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            <ErrorText error={delAdjustment.error} />
-          </Card>
-        )}
       </div>
 
-      <Modal
-        open={adjusting !== null}
-        title={adjusting?.row ? 'Edit adjustment' : 'Edit portfolio balance'}
-        onClose={() => setAdjusting(null)}
-      >
+      <Modal open={adjusting} title="Edit portfolio balance" onClose={() => setAdjusting(false)}>
         {adjusting && account && (
           <AdjustBalanceForm
             portfolioValue={account.portfolioValue}
             cashUsdt={account.cashUsdt}
-            initial={adjusting.row}
-            onDone={() => setAdjusting(null)}
+            onDone={() => setAdjusting(false)}
           />
         )}
       </Modal>

@@ -262,11 +262,6 @@ export default function Dashboard() {
                 <Pnl value={account.totalReturn} pct={account.totalReturnPct} />{' '}
                 <span className="text-muted">all time</span>
               </span>
-              {!account.adjustmentsTotal.isZero() && (
-                <span className="text-muted">
-                  incl. adjustments <Pnl value={account.adjustmentsTotal} />
-                </span>
-              )}
             </span>
           }
           aside={
