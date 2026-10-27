@@ -12,29 +12,40 @@ import {
   combinedDailyRate,
   MEEZAN_OWNERS,
   ownerLabel,
+  ownerShares,
   project,
   ratesFromDaily,
   summarizeHolding,
   type HoldingSummary,
+  type OwnerShare,
   type MeezanFund,
   type MeezanKind,
 } from '../lib/meezan';
 import { formatLakh, formatPct, formatRs, sum, ZERO, type Decimal } from '../lib/money';
 import type { MeezanEntryRow } from '../lib/types';
 
+/** One fund = one shared account, split between family members. */
 interface Holding {
-  key: string;
-  owner: string;
   fund: MeezanFund;
   entries: MeezanEntryRow[];
   summary: HoldingSummary;
+  shares: OwnerShare[];
 }
 
 type Dialog = {
   kind: MeezanKind;
-  defaults?: { owner: string; fund: MeezanFund };
+  defaults?: { owner?: string; fund: MeezanFund };
   row?: MeezanEntryRow;
 } | null;
+
+/** Lists people in the family order (Mine, Junaid, Usama, Dad), then anyone else. */
+function ownerOrder(a: string, b: string): number {
+  const i = (id: string) => {
+    const n = MEEZAN_OWNERS.findIndex((o) => o.id === id);
+    return n === -1 ? MEEZAN_OWNERS.length : n;
+  };
+  return i(a) - i(b) || a.localeCompare(b);
+}
 
 function Rs({
   v,
@@ -248,12 +259,11 @@ function HoldingRow({
     <li className="px-4 py-3">
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={() => setOpen(!open)} className="flex-1 min-w-0 text-left">
-          <div className="font-medium">
-            {ownerLabel(h.owner)} · {h.fund}
-          </div>
+          <div className="font-medium">{h.fund} · shared account</div>
           <div className="text-xs text-muted">
             {s.lastUpdate ? `Updated ${sinceText(s.lastUpdate.at)}` : 'No balance update yet'}
-            {yearly && ` · ${formatPct(yearly, { sign: false })} a year`}
+            {yearly && ` · ${formatPct(yearly, { sign: false })} a year`} ·{' '}
+            {open ? 'hide history' : 'show history'}
           </div>
         </button>
         <div className="text-right text-sm tabular-nums">
@@ -279,9 +289,7 @@ function HoldingRow({
               <span className="flex-1">
                 {e.kind === 'valuation'
                   ? 'Balance'
-                  : e.kind === 'deposit'
-                    ? 'Invested'
-                    : 'Withdrew'}{' '}
+                  : `${ownerLabel(e.owner)} ${e.kind === 'deposit' ? 'invested' : 'withdrew'}`}{' '}
                 <span className="tabular-nums">{formatRs(e.amount_pkr)}</span>
                 {e.note && <span className="text-xs text-muted"> · {e.note}</span>}
               </span>
@@ -309,57 +317,139 @@ function HoldingRow({
   );
 }
 
+/** Who put in how much, and what their share is worth now. */
+function Contributions({
+  rows,
+  total,
+  onSelect,
+}: {
+  rows: { owner: string; invested: Decimal; value: Decimal; profit: Decimal; netProfit: Decimal }[];
+  total: Decimal;
+  onSelect: (owner: string) => void;
+}) {
+  return (
+    <Card className="p-0">
+      <h2 className="text-sm font-medium px-4 pt-4 pb-2">Who invested how much</h2>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm tabular-nums">
+          <thead className="text-xs text-muted">
+            <tr className="text-left">
+              <th className="px-4 py-2 font-normal">Person</th>
+              <th className="px-2 py-2 font-normal text-right">Invested</th>
+              <th className="px-2 py-2 font-normal text-right">Share now</th>
+              <th className="px-2 py-2 font-normal text-right">Profit</th>
+              <th className="px-2 py-2 font-normal text-right">After tax</th>
+              <th className="px-4 py-2 font-normal text-right">Of total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map((r) => (
+              <tr key={r.owner} className="whitespace-nowrap hover:bg-surface/50">
+                <td className="px-4 py-2 font-medium">
+                  <button
+                    type="button"
+                    className="hover:underline"
+                    onClick={() => onSelect(r.owner)}
+                  >
+                    {ownerLabel(r.owner)}
+                  </button>
+                </td>
+                <td className="px-2 py-2 text-right">{formatRs(r.invested)}</td>
+                <td className="px-2 py-2 text-right">{formatRs(r.value)}</td>
+                <td className="px-2 py-2 text-right">
+                  <Rs v={r.profit} sign />
+                </td>
+                <td className="px-2 py-2 text-right">
+                  <Rs v={r.netProfit} sign />
+                </td>
+                <td className="px-4 py-2 text-right text-muted">
+                  {total.gt(0) ? formatPct(r.value.div(total), { sign: false }) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 export default function Meezan() {
   const entries = useMeezanEntries();
   const [owner, setOwner] = useState<string>('all');
   const [dialog, setDialog] = useState<Dialog>(null);
 
   const holdings = useMemo<Holding[]>(() => {
-    const groups = new Map<string, MeezanEntryRow[]>();
-    for (const e of entries.data ?? []) {
-      const key = `${e.owner}|${e.fund}`;
-      groups.set(key, [...(groups.get(key) ?? []), e]);
-    }
-    return [...groups].map(([key, rows]) => ({
-      key,
-      owner: rows[0]!.owner,
-      fund: rows[0]!.fund,
+    const groups = new Map<MeezanFund, MeezanEntryRow[]>();
+    for (const e of entries.data ?? []) groups.set(e.fund, [...(groups.get(e.fund) ?? []), e]);
+    return [...groups].map(([fund, rows]) => ({
+      fund,
       entries: rows,
       summary: summarizeHolding(rows),
+      shares: ownerShares(rows),
     }));
   }, [entries.data]);
 
-  const owners = MEEZAN_OWNERS.filter((o) => holdings.some((h) => h.owner === o.id));
-  const shown = holdings.filter((h) => owner === 'all' || h.owner === owner);
+  // Each person's totals across funds.
+  const people = useMemo(() => {
+    const byOwner = new Map<string, OwnerShare[]>();
+    for (const h of holdings) {
+      for (const sh of h.shares) byOwner.set(sh.owner, [...(byOwner.get(sh.owner) ?? []), sh]);
+    }
+    return [...byOwner]
+      .sort(([a], [b]) => ownerOrder(a, b))
+      .map(([id, shs]) => {
+        const periods = shs.flatMap((x) => x.periods).filter((p) => p.capitalDays.gt(0));
+        return {
+          owner: id,
+          invested: sum(shs.map((x) => x.invested)),
+          value: sum(shs.map((x) => x.currentValue)),
+          profit: sum(shs.map((x) => x.profit)),
+          tax: sum(shs.map((x) => x.tax)),
+          netProfit: sum(shs.map((x) => x.netProfit)),
+          avgDaily: combinedDailyRate([periods]),
+          latestDaily: periods[periods.length - 1]?.dailyRate ?? null,
+        };
+      });
+  }, [holdings]);
+
+  const lastUpdates = holdings.flatMap((h) =>
+    h.summary.lastUpdate ? [h.summary.lastUpdate.at] : [],
+  );
+  const lastUpdate = lastUpdates.length
+    ? new Date(Math.max(...lastUpdates.map((u) => u.getTime())))
+    : null;
+
   const totals = useMemo(() => {
-    const ss = shown.map((h) => h.summary);
-    const value = sum(ss.map((s) => s.currentValue));
-    const profit = sum(ss.map((s) => s.profit));
-    const updates = ss.flatMap((s) => (s.lastUpdate ? [s.lastUpdate.at] : []));
-    const latestEach = ss.map((s) => s.latestDailyRate).filter((r): r is Decimal => r !== null);
+    const person = people.find((p) => p.owner === owner);
+    if (person) {
+      return { ...person, addedSinceUpdate: null as Decimal | null };
+    }
+    const ss = holdings.map((h) => h.summary);
+    const latestEach = ss.filter((s) => s.latestDailyRate);
     return {
-      value,
+      value: sum(ss.map((s) => s.currentValue)),
       invested: sum(ss.map((s) => s.invested)),
-      profit,
+      profit: sum(ss.map((s) => s.profit)),
       tax: sum(ss.map((s) => s.tax)),
       netProfit: sum(ss.map((s) => s.netProfit)),
-      addedSinceUpdate: sum(ss.map((s) => s.addedSinceUpdate)),
-      lastUpdate: updates.length ? new Date(Math.max(...updates.map((u) => u.getTime()))) : null,
+      addedSinceUpdate: sum(ss.map((s) => s.addedSinceUpdate)) as Decimal | null,
       avgDaily: combinedDailyRate(ss.map((s) => s.periods)),
-      // value-weighted latest rate across holdings
+      // value-weighted latest rate across funds
       latestDaily: latestEach.length
-        ? sum(
-            ss.map((s) => (s.latestDailyRate ? s.latestDailyRate.times(s.currentValue) : ZERO)),
-          ).div(sum(ss.filter((s) => s.latestDailyRate).map((s) => s.currentValue)))
+        ? sum(latestEach.map((s) => s.latestDailyRate!.times(s.currentValue))).div(
+            sum(latestEach.map((s) => s.currentValue)),
+          )
         : null,
     };
-  }, [shown]);
+  }, [holdings, people, owner]);
 
   const rates = totals.avgDaily ? ratesFromDaily(totals.avgDaily) : null;
   const latestRates = totals.latestDaily ? ratesFromDaily(totals.latestDaily) : null;
   const monthProfit = rates ? totals.value.times(rates.monthly) : null;
   const yearProfit = rates ? totals.value.times(rates.yearly) : null;
   const missingTable = entries.error && /meezan_entries/.test(entries.error.message);
+  const familyValue = sum(holdings.map((h) => h.summary.currentValue));
 
   return (
     <>
@@ -367,7 +457,16 @@ export default function Meezan() {
         title="Al Meezan"
         actions={
           <div className="flex gap-2">
-            <Button onClick={() => setDialog({ kind: 'deposit' })}>Add investment</Button>
+            <Button
+              onClick={() =>
+                setDialog({
+                  kind: 'deposit',
+                  defaults: owner !== 'all' ? { owner, fund: 'MIACF' } : undefined,
+                })
+              }
+            >
+              Add investment
+            </Button>
             <Button variant="primary" onClick={() => setDialog({ kind: 'valuation' })}>
               Update balance
             </Button>
@@ -388,31 +487,31 @@ export default function Meezan() {
       {entries.data && holdings.length === 0 && !missingTable && (
         <Card>
           <p className="text-sm text-muted">
-            No investments yet. Use “Add investment” for money put in, then “Update balance” with
-            the figure from the Al Meezan app every day or two.
+            No investments yet. Use “Add investment” for money put in (choose whose it is), then
+            “Update balance” with the figure from the Al Meezan app every day or two.
           </p>
         </Card>
       )}
 
       {holdings.length > 0 && (
         <div className="space-y-4">
-          {owners.length > 1 && (
+          {people.length > 1 && (
             <div className="flex flex-wrap gap-1 rounded-md bg-card p-1 text-sm w-fit">
-              {[{ id: 'all', label: 'Family' }, ...owners].map((o) => (
+              {[{ owner: 'all' }, ...people].map((p) => (
                 <button
-                  key={o.id}
+                  key={p.owner}
                   type="button"
-                  onClick={() => setOwner(o.id)}
-                  className={`rounded px-3 py-1 ${owner === o.id ? 'bg-surface text-fg' : 'text-muted'}`}
+                  onClick={() => setOwner(p.owner)}
+                  className={`rounded px-3 py-1 ${owner === p.owner ? 'bg-surface text-fg' : 'text-muted'}`}
                 >
-                  {o.label}
+                  {p.owner === 'all' ? 'Family' : ownerLabel(p.owner)}
                 </button>
               ))}
             </div>
           )}
 
           <Card className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Stat label="Current value">
+            <Stat label={owner === 'all' ? 'Current value' : `${ownerLabel(owner)} share`}>
               {formatRs(totals.value)}
               <div className="text-xs font-normal text-muted">{formatLakh(totals.value)}</div>
             </Stat>
@@ -423,15 +522,19 @@ export default function Meezan() {
                 after 15% tax <Rs v={totals.netProfit} sign />
               </div>
             </Stat>
-            <Stat label="Last update">
-              {totals.lastUpdate ? sinceText(totals.lastUpdate) : '—'}
-              {totals.addedSinceUpdate.gt(0) && (
+            <Stat label="Last balance update">
+              {lastUpdate ? sinceText(lastUpdate) : '—'}
+              {totals.addedSinceUpdate?.gt(0) && (
                 <div className="text-xs font-normal text-muted">
                   {formatRs(totals.addedSinceUpdate)} added since
                 </div>
               )}
             </Stat>
           </Card>
+
+          {owner === 'all' && people.length > 0 && (
+            <Contributions rows={people} total={familyValue} onSelect={setOwner} />
+          )}
 
           <Section title="Profit rate (average since start)">
             {!rates ? (
@@ -489,30 +592,36 @@ export default function Meezan() {
           </Section>
 
           <Projection
+            key={owner}
             start={totals.value}
             avgDaily={totals.avgDaily}
             latestDaily={totals.latestDaily}
           />
 
           <Card className="p-0">
-            <h2 className="text-sm font-medium px-4 pt-4 pb-1">Holdings</h2>
+            <h2 className="text-sm font-medium px-4 pt-4 pb-1">Funds</h2>
             <ul className="divide-y divide-border">
-              {shown.map((h) => (
+              {holdings.map((h) => (
                 <HoldingRow
-                  key={h.key}
+                  key={h.fund}
                   h={h}
-                  onAdd={(kind) => setDialog({ kind, defaults: { owner: h.owner, fund: h.fund } })}
+                  onAdd={(kind) =>
+                    setDialog({
+                      kind,
+                      defaults: { fund: h.fund, owner: owner !== 'all' ? owner : undefined },
+                    })
+                  }
                   onEdit={(row) => setDialog({ kind: row.kind, row })}
                 />
               ))}
             </ul>
           </Card>
 
-          {totals.lastUpdate && (
+          {lastUpdate && (
             <p className="text-xs text-muted">
-              Last balance update {format(totals.lastUpdate, 'd MMM yyyy, HH:mm')}. Money added
-              earns from the next day; profit between updates is the balance change minus money
-              added.
+              Last balance update {format(lastUpdate, 'd MMM yyyy, HH:mm')}. Money added earns from
+              the next day. Profit between updates is the balance change minus money added, shared
+              between people by amount × days invested.
             </p>
           )}
         </div>

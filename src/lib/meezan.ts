@@ -1,9 +1,11 @@
 import { d, safeDiv, sum, ZERO, type Decimal, type Value } from './money';
 import { toDate } from './pnl';
 
-// Al Meezan fund maths (PKR). Money added on day D earns its first profit on D+1. Between two
-// balance updates, profit = balance change − money added, and the daily rate is that profit over
-// the rupee-days the money was earning.
+// Al Meezan fund maths (PKR). Each fund is one shared account: money in/out is tagged with the
+// family member it belongs to, balance updates are for the whole account. Money added on day D
+// earns its first profit on D+1. Between two balance updates, profit = balance change − money
+// added; the daily rate is that profit over the rupee-days the money was earning, and the profit
+// is shared between people in proportion to their rupee-days.
 
 export const MEEZAN_FUNDS = ['AMMF', 'MIACF'] as const;
 export type MeezanFund = (typeof MEEZAN_FUNDS)[number];
@@ -14,6 +16,9 @@ export const MEEZAN_OWNERS = [
   { id: 'usama', label: "Usama's" },
   { id: 'dad', label: "Dad's" },
 ] as const;
+
+/** `owner` stored on balance updates, which belong to the whole shared account. */
+export const SHARED_OWNER = 'shared';
 
 export function ownerLabel(id: string): string {
   return MEEZAN_OWNERS.find((o) => o.id === id)?.label ?? id;
@@ -30,6 +35,8 @@ export interface MeezanEntryInput {
   kind: MeezanKind;
   amount_pkr: Value;
   occurred_at: string | Date;
+  /** Who the money belongs to (deposits/withdrawals); ignored on balance updates. */
+  owner?: string;
 }
 
 /** Calendar day number in the browser's time zone (so "same day" means the user's day). */
@@ -145,6 +152,122 @@ export function summarizeHolding(entries: readonly MeezanEntryInput[]): HoldingS
     latestDailyRate: latest?.dailyRate ?? null,
     firstAt: first ? toDate(first.occurred_at) : null,
   };
+}
+
+export interface OwnerShare {
+  owner: string;
+  deposits: Decimal;
+  withdrawals: Decimal;
+  invested: Decimal;
+  /** Share of the account at the last balance update + money added since. */
+  currentValue: Decimal;
+  profit: Decimal;
+  tax: Decimal;
+  netProfit: Decimal;
+  netValue: Decimal;
+  /** This person's profit and rupee-days per period (for their own rate). */
+  periods: MeezanPeriod[];
+  avgDailyRate: Decimal | null;
+}
+
+/**
+ * Splits a shared account between family members. Each period's profit goes to people in
+ * proportion to their rupee-days (balance share × days + money added × days earning).
+ */
+export function ownerShares(entries: readonly MeezanEntryInput[]): OwnerShare[] {
+  const sorted = [...entries].sort(
+    (a, b) =>
+      toDate(a.occurred_at).getTime() - toDate(b.occurred_at).getTime() ||
+      KIND_ORDER[a.kind] - KIND_ORDER[b.kind],
+  );
+  type State = {
+    value: Decimal; // share at last balance update
+    pending: { amount: Decimal; day: number }[];
+    deposits: Decimal;
+    withdrawals: Decimal;
+    periods: MeezanPeriod[];
+  };
+  const people = new Map<string, State>();
+  const person = (owner: string) => {
+    let st = people.get(owner);
+    if (!st) {
+      st = { value: ZERO, pending: [], deposits: ZERO, withdrawals: ZERO, periods: [] };
+      people.set(owner, st);
+    }
+    return st;
+  };
+  let last: { at: Date; day: number } | null = null;
+
+  for (const e of sorted) {
+    const at = toDate(e.occurred_at);
+    const day = dayNumber(at);
+    const amount = d(e.amount_pkr);
+    if (e.kind !== 'valuation') {
+      const st = person(e.owner ?? SHARED_OWNER);
+      if (e.kind === 'deposit') st.deposits = st.deposits.plus(amount);
+      else st.withdrawals = st.withdrawals.plus(amount);
+      st.pending.push({ amount: e.kind === 'deposit' ? amount : amount.neg(), day });
+      continue;
+    }
+
+    const lastDay = last?.day ?? day;
+    const rows = [...people.values()].map((st) => {
+      const added = sum(st.pending.map((p) => p.amount));
+      const capitalDays = st.value
+        .times(Math.max(0, day - lastDay))
+        .plus(sum(st.pending.map((p) => p.amount.times(Math.max(0, day - p.day)))));
+      return { st, added, capitalDays, before: st.value.plus(added) };
+    });
+    const profit = amount.minus(sum(rows.map((r) => r.before)));
+    const totalCd = sum(rows.map((r) => r.capitalDays));
+    const totalBefore = sum(rows.map((r) => r.before));
+    // Weights: rupee-days; if nothing was earning yet (same-day update), current amounts.
+    const weights = rows.map((r) => (totalCd.gt(0) ? r.capitalDays : r.before));
+    const totalWeight = totalCd.gt(0) ? totalCd : totalBefore;
+
+    let given: Decimal = ZERO;
+    rows.forEach((r, i) => {
+      // The last person takes the rounding remainder so shares always add up to the balance.
+      const share =
+        i === rows.length - 1
+          ? profit.minus(given)
+          : totalWeight.gt(0)
+            ? profit.times(weights[i]!).div(totalWeight)
+            : ZERO;
+      given = given.plus(share);
+      r.st.periods.push({
+        from: last?.at ?? null,
+        to: at,
+        days: Math.max(0, day - lastDay),
+        profit: share,
+        capitalDays: r.capitalDays,
+        dailyRate: r.capitalDays.gt(0) ? share.div(r.capitalDays) : null,
+      });
+      r.st.value = r.before.plus(share);
+      r.st.pending = [];
+    });
+    last = { at, day };
+  }
+
+  return [...people].map(([owner, st]) => {
+    const invested = st.deposits.minus(st.withdrawals);
+    const currentValue = st.value.plus(sum(st.pending.map((p) => p.amount)));
+    const profit = currentValue.minus(invested);
+    const tax = profit.gt(0) ? profit.times(MEEZAN_TAX_RATE) : ZERO;
+    return {
+      owner,
+      deposits: st.deposits,
+      withdrawals: st.withdrawals,
+      invested,
+      currentValue,
+      profit,
+      tax,
+      netProfit: profit.minus(tax),
+      netValue: currentValue.minus(tax),
+      periods: st.periods,
+      avgDailyRate: combinedDailyRate([st.periods]),
+    };
+  });
 }
 
 /** Average daily rate across several holdings' periods (weighted by rupee-days). */

@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { useSaveMeezanEntry } from '../data/meezan';
 import { fromLocalInput, toLocalInput } from '../lib/dates';
 import { parseDecimal } from '../lib/fillMath';
-import { MEEZAN_FUNDS, MEEZAN_OWNERS, type MeezanFund, type MeezanKind } from '../lib/meezan';
+import {
+  MEEZAN_FUNDS,
+  MEEZAN_OWNERS,
+  SHARED_OWNER,
+  type MeezanFund,
+  type MeezanKind,
+} from '../lib/meezan';
 import { d, formatLakh, formatRs } from '../lib/money';
 import type { MeezanEntryRow } from '../lib/types';
 import { Button, ErrorText, Field, inputClass } from './ui';
@@ -12,7 +18,7 @@ const LAST_KEY = 'ctt.meezanLast';
 function lastUsed(): { owner: string; fund: MeezanFund } {
   try {
     const v = JSON.parse(localStorage.getItem(LAST_KEY) ?? 'null');
-    if (v?.owner && v?.fund) return v;
+    if (v?.owner && v?.fund && v.owner !== SHARED_OWNER) return v;
   } catch {
     // ignore
   }
@@ -33,15 +39,19 @@ export default function MeezanEntryForm({
 }: {
   kind: MeezanKind;
   initial?: MeezanEntryRow;
-  /** Pre-select a holding (e.g. when opened from that holding's row). */
-  defaults?: { owner: string; fund: MeezanFund };
+  /** Pre-select a fund and/or person (e.g. when opened from a fund's row). */
+  defaults?: { owner?: string; fund: MeezanFund };
   onDone: () => void;
 }) {
   const save = useSaveMeezanEntry();
-  const start = initial ?? defaults ?? lastUsed();
+  const remembered = lastUsed();
   const [kind, setKind] = useState<MeezanKind>(initial?.kind ?? initialKind);
-  const [owner, setOwner] = useState(start.owner);
-  const [fund, setFund] = useState<MeezanFund>(start.fund as MeezanFund);
+  // Balance updates belong to the shared account; money in/out belongs to a person.
+  const startOwner = initial?.owner ?? defaults?.owner ?? remembered.owner;
+  const [owner, setOwner] = useState(startOwner === SHARED_OWNER ? remembered.owner : startOwner);
+  const [fund, setFund] = useState<MeezanFund>(
+    (initial?.fund ?? defaults?.fund ?? remembered.fund) as MeezanFund,
+  );
   const [amount, setAmount] = useState(initial ? d(initial.amount_pkr).toFixed() : '');
   const [when, setWhen] = useState(toLocalInput(initial?.occurred_at ?? new Date()));
   const [note, setNote] = useState(initial?.note ?? '');
@@ -54,7 +64,7 @@ export default function MeezanEntryForm({
     await save.mutateAsync({
       id: initial?.id,
       draft: {
-        owner,
+        owner: kind === 'valuation' ? SHARED_OWNER : owner,
         fund,
         kind,
         amount_pkr: value.toDecimalPlaces(2).toFixed(),
@@ -86,15 +96,21 @@ export default function MeezanEntryForm({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Whose">
-          <select value={owner} onChange={(e) => setOwner(e.target.value)} className={inputClass}>
-            {MEEZAN_OWNERS.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {kind === 'valuation' ? (
+          <p className="self-end pb-2 text-xs text-muted">
+            The whole {fund} account (everyone’s money). Profit is shared out automatically.
+          </p>
+        ) : (
+          <Field label="Whose money">
+            <select value={owner} onChange={(e) => setOwner(e.target.value)} className={inputClass}>
+              {MEEZAN_OWNERS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label="Fund">
           <select
             value={fund}

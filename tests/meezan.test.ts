@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   afterTax,
   combinedDailyRate,
+  ownerShares,
   project,
   ratesFromDaily,
   summarizeHolding,
@@ -89,5 +90,41 @@ describe('project', () => {
     expect(s(rows[0]!.contributed)).toBe('220000');
     expect(s(rows[0]!.value, 2)).toBe('240775.78');
     expect(s(rows[9]!.contributed)).toBe('1300000');
+  });
+});
+
+describe('ownerShares (one shared account)', () => {
+  // Dad starts alone; on day 12 Junaid and Dad both add money, then a one-day update.
+  const shared: MeezanEntryInput[] = [
+    { kind: 'deposit', owner: 'dad', amount_pkr: 1_000_000, occurred_at: at(2026, 10, 1, 10) },
+    { kind: 'deposit', owner: 'junaid', amount_pkr: 100_000, occurred_at: at(2026, 10, 12, 10) },
+    { kind: 'deposit', owner: 'dad', amount_pkr: 900_000, occurred_at: at(2026, 10, 12, 10) },
+    { kind: 'valuation', amount_pkr: 2_003_300, occurred_at: at(2026, 10, 12, 11) },
+    { kind: 'valuation', amount_pkr: 2_003_900, occurred_at: at(2026, 10, 13, 9) },
+    { kind: 'deposit', owner: 'dad', amount_pkr: 500_000, occurred_at: at(2026, 10, 13, 12) },
+  ];
+  const shares = ownerShares(shared);
+  const dad = shares.find((x) => x.owner === 'dad')!;
+  const junaid = shares.find((x) => x.owner === 'junaid')!;
+
+  it('tracks who put in how much', () => {
+    expect(s(dad.invested)).toBe('2400000');
+    expect(s(junaid.invested)).toBe('100000');
+  });
+
+  it('gives earlier profit only to money that was earning then', () => {
+    // First period: only Dad's 1M was earning → all 3,300 is his.
+    expect(s(dad.periods[0]!.profit)).toBe('3300');
+    expect(s(junaid.periods[0]!.profit)).toBe('0');
+  });
+
+  it('splits later profit by rupee-days and adds up to the account', () => {
+    expect(s(junaid.profit, 4)).toBe('29.9506'); // 600 × 100,000 / 2,003,300
+    expect(s(dad.profit, 4)).toBe('3870.0494');
+    expect(s(dad.currentValue.plus(junaid.currentValue))).toBe(
+      s(summarizeHolding(shared).currentValue),
+    );
+    expect(s(junaid.avgDailyRate, 10)).toBe('0.0002995058'); // same rate as the account that day
+    expect(s(junaid.tax, 4)).toBe('4.4926');
   });
 });
