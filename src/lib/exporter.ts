@@ -71,6 +71,16 @@ const balanceAdjustment = z.object({
   note: z.string().nullable().optional(),
 });
 
+const meezanEntry = z.object({
+  id: z.string().uuid(),
+  owner: z.string().min(1),
+  fund: z.enum(['AMMF', 'MIACF']),
+  kind: z.enum(['deposit', 'withdrawal', 'valuation']),
+  amount_pkr: numeric,
+  occurred_at: ts,
+  note: z.string().nullable().optional(),
+});
+
 const monthSnapshot = z.object({
   month: z.string().regex(/^\d{4}-\d{2}-01$/),
   start_capital: numeric.nullable().optional(),
@@ -92,6 +102,7 @@ export const backupSchema = z
     month_snapshots: z.array(monthSnapshot),
     // Added after the first release; older backups simply have none.
     balance_adjustments: z.array(balanceAdjustment).default([]),
+    meezan_entries: z.array(meezanEntry).default([]),
   })
   .superRefine((b, ctx) => {
     const ids = new Set(b.positions.map((p) => p.id));

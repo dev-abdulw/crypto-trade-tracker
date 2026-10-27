@@ -1,0 +1,214 @@
+import { d, safeDiv, sum, ZERO, type Decimal, type Value } from './money';
+import { toDate } from './pnl';
+
+// Al Meezan fund maths (PKR). Money added on day D earns its first profit on D+1. Between two
+// balance updates, profit = balance change − money added, and the daily rate is that profit over
+// the rupee-days the money was earning.
+
+export const MEEZAN_FUNDS = ['AMMF', 'MIACF'] as const;
+export type MeezanFund = (typeof MEEZAN_FUNDS)[number];
+
+export const MEEZAN_OWNERS = [
+  { id: 'me', label: 'Mine' },
+  { id: 'junaid', label: "Junaid's" },
+  { id: 'usama', label: "Usama's" },
+  { id: 'dad', label: "Dad's" },
+] as const;
+
+export function ownerLabel(id: string): string {
+  return MEEZAN_OWNERS.find((o) => o.id === id)?.label ?? id;
+}
+
+/** Tax on profit. */
+export const MEEZAN_TAX_RATE = d('0.15');
+
+const DAYS_PER_YEAR = 365;
+
+export type MeezanKind = 'deposit' | 'withdrawal' | 'valuation';
+
+export interface MeezanEntryInput {
+  kind: MeezanKind;
+  amount_pkr: Value;
+  occurred_at: string | Date;
+}
+
+/** Calendar day number in the browser's time zone (so "same day" means the user's day). */
+export function dayNumber(at: string | Date): number {
+  const t = toDate(at);
+  return Math.round(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / 86_400_000);
+}
+
+export interface MeezanPeriod {
+  from: Date | null;
+  to: Date;
+  days: number;
+  /** Profit earned in the period (balance change minus net money added). */
+  profit: Decimal;
+  /** Σ rupees × days earning in the period. */
+  capitalDays: Decimal;
+  dailyRate: Decimal | null;
+}
+
+export interface HoldingSummary {
+  deposits: Decimal;
+  withdrawals: Decimal;
+  /** deposits − withdrawals */
+  invested: Decimal;
+  lastUpdate: { at: Date; value: Decimal } | null;
+  /** Net money added after the last balance update (not yet reflected in a reported profit). */
+  addedSinceUpdate: Decimal;
+  /** Last reported balance + money added since. */
+  currentValue: Decimal;
+  /** Gross profit since the start. */
+  profit: Decimal;
+  tax: Decimal;
+  netProfit: Decimal;
+  netValue: Decimal;
+  periods: MeezanPeriod[];
+  /** Σ profit / Σ rupee-days over every period with money earning. */
+  avgDailyRate: Decimal | null;
+  latestDailyRate: Decimal | null;
+  firstAt: Date | null;
+}
+
+const KIND_ORDER: Record<MeezanKind, number> = { deposit: 0, withdrawal: 1, valuation: 2 };
+
+export function summarizeHolding(entries: readonly MeezanEntryInput[]): HoldingSummary {
+  const sorted = [...entries].sort(
+    (a, b) =>
+      toDate(a.occurred_at).getTime() - toDate(b.occurred_at).getTime() ||
+      KIND_ORDER[a.kind] - KIND_ORDER[b.kind],
+  );
+
+  let deposits: Decimal = ZERO;
+  let withdrawals: Decimal = ZERO;
+  let last: { at: Date; day: number; value: Decimal } | null = null;
+  let pending: { amount: Decimal; day: number }[] = [];
+  const periods: MeezanPeriod[] = [];
+
+  for (const e of sorted) {
+    const at = toDate(e.occurred_at);
+    const day = dayNumber(at);
+    const amount = d(e.amount_pkr);
+    if (e.kind === 'deposit') {
+      deposits = deposits.plus(amount);
+      pending.push({ amount, day });
+      continue;
+    }
+    if (e.kind === 'withdrawal') {
+      withdrawals = withdrawals.plus(amount);
+      pending.push({ amount: amount.neg(), day });
+      continue;
+    }
+    // Balance update.
+    const startValue = last?.value ?? ZERO;
+    const startDay = last?.day ?? day;
+    const added = sum(pending.map((p) => p.amount));
+    const capitalDays = startValue
+      .times(Math.max(0, day - startDay))
+      .plus(sum(pending.map((p) => p.amount.times(Math.max(0, day - p.day)))));
+    const profit = amount.minus(startValue).minus(added);
+    periods.push({
+      from: last?.at ?? null,
+      to: at,
+      days: Math.max(0, day - (last?.day ?? Math.min(day, ...pending.map((p) => p.day)))),
+      profit,
+      capitalDays,
+      dailyRate: capitalDays.gt(0) ? profit.div(capitalDays) : null,
+    });
+    last = { at, day, value: amount };
+    pending = [];
+  }
+
+  const invested = deposits.minus(withdrawals);
+  const addedSinceUpdate = sum(pending.map((p) => p.amount));
+  const currentValue = (last?.value ?? ZERO).plus(addedSinceUpdate);
+  const profit = currentValue.minus(invested);
+  const tax = profit.gt(0) ? profit.times(MEEZAN_TAX_RATE) : ZERO;
+  const earning = periods.filter((p) => p.capitalDays.gt(0));
+  const latest = earning[earning.length - 1];
+  const first = sorted[0];
+
+  return {
+    deposits,
+    withdrawals,
+    invested,
+    lastUpdate: last ? { at: last.at, value: last.value } : null,
+    addedSinceUpdate,
+    currentValue,
+    profit,
+    tax,
+    netProfit: profit.minus(tax),
+    netValue: currentValue.minus(tax),
+    periods,
+    avgDailyRate: combinedDailyRate([periods]),
+    latestDailyRate: latest?.dailyRate ?? null,
+    firstAt: first ? toDate(first.occurred_at) : null,
+  };
+}
+
+/** Average daily rate across several holdings' periods (weighted by rupee-days). */
+export function combinedDailyRate(
+  periodLists: readonly (readonly MeezanPeriod[])[],
+): Decimal | null {
+  const all = periodLists.flat().filter((p) => p.capitalDays.gt(0));
+  return safeDiv(sum(all.map((p) => p.profit)), sum(all.map((p) => p.capitalDays)));
+}
+
+export interface Rates {
+  daily: Decimal;
+  /** Compounded over an average month (365/12 days). */
+  monthly: Decimal;
+  /** Compounded over a year. */
+  yearly: Decimal;
+}
+
+export function ratesFromDaily(daily: Value): Rates {
+  const growth = d(daily).plus(1);
+  return {
+    daily: d(daily),
+    monthly: growth.pow(DAYS_PER_YEAR / 12).minus(1),
+    yearly: growth.pow(DAYS_PER_YEAR).minus(1),
+  };
+}
+
+export function afterTax(profit: Value): Decimal {
+  const p = d(profit);
+  return p.gt(0) ? p.times(d(1).minus(MEEZAN_TAX_RATE)) : p;
+}
+
+export interface ProjectionRow {
+  year: number;
+  contributed: Decimal;
+  value: Decimal;
+  profit: Decimal;
+  tax: Decimal;
+  netValue: Decimal;
+}
+
+/**
+ * Month-by-month growth with profit reinvested. Each month's SIP is added at the start of the
+ * month and earns that month. Tax is 15% of total profit, taken at the end (on withdrawal).
+ */
+export function project(args: {
+  start: Value;
+  monthlySip: Value;
+  years: number;
+  monthlyRate: Value;
+}): ProjectionRow[] {
+  const growth = d(args.monthlyRate).plus(1);
+  const sip = d(args.monthlySip);
+  let value = d(args.start);
+  let contributed = d(args.start);
+  const rows: ProjectionRow[] = [];
+  for (let month = 1; month <= args.years * 12; month++) {
+    value = value.plus(sip).times(growth);
+    contributed = contributed.plus(sip);
+    if (month % 12 === 0) {
+      const profit = value.minus(contributed);
+      const tax = profit.gt(0) ? profit.times(MEEZAN_TAX_RATE) : ZERO;
+      rows.push({ year: month / 12, contributed, value, profit, tax, netValue: value.minus(tax) });
+    }
+  }
+  return rows;
+}

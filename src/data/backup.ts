@@ -3,6 +3,7 @@ import { BACKUP_APP, BACKUP_VERSION, type Backup } from '../lib/exporter';
 import type {
   BalanceAdjustmentRow,
   CapitalFlowRow,
+  MeezanEntryRow,
   FillRow,
   MonthSnapshotRow,
   PositionRow,
@@ -12,6 +13,7 @@ import {
   CAPITAL_FLOW_COLS,
   fetchAll,
   FILL_COLS,
+  MEEZAN_COLS,
   POSITION_COLS,
   unwrap,
 } from './db';
@@ -28,8 +30,8 @@ const strip = <T extends { user_id?: string; created_at?: string; updated_at?: s
 }: T) => rest;
 
 export async function exportBackup() {
-  const [capital_flows, positions, fills, month_snapshots, balance_adjustments] = await Promise.all(
-    [
+  const [capital_flows, positions, fills, month_snapshots, balance_adjustments, meezan_entries] =
+    await Promise.all([
       fetchAll<CapitalFlowRow>((f, t) =>
         supabase.from('capital_flows').select(CAPITAL_FLOW_COLS).order('occurred_at').range(f, t),
       ),
@@ -49,8 +51,10 @@ export async function exportBackup() {
           .order('occurred_at')
           .range(f, t),
       ).catch(() => [] as BalanceAdjustmentRow[]), // table missing until migration 0002 is run
-    ],
-  );
+      fetchAll<MeezanEntryRow>((f, t) =>
+        supabase.from('meezan_entries').select(MEEZAN_COLS).order('occurred_at').range(f, t),
+      ).catch(() => [] as MeezanEntryRow[]), // table missing until migration 0003 is run
+    ]);
   return {
     app: BACKUP_APP,
     version: BACKUP_VERSION,
@@ -60,6 +64,7 @@ export async function exportBackup() {
     fills: fills.map(strip),
     month_snapshots,
     balance_adjustments: balance_adjustments.map(strip),
+    meezan_entries: meezan_entries.map(strip),
   };
 }
 
@@ -85,7 +90,11 @@ export async function importBackup(b: Backup) {
   for (const rows of chunks(b.balance_adjustments)) {
     unwrap(await supabase.from('balance_adjustments').upsert(rows, { onConflict: 'id' }));
   }
+  for (const rows of chunks(b.meezan_entries)) {
+    unwrap(await supabase.from('meezan_entries').upsert(rows, { onConflict: 'id' }));
+  }
   return {
+    meezan_entries: b.meezan_entries.length,
     balance_adjustments: b.balance_adjustments.length,
     capital_flows: b.capital_flows.length,
     positions: b.positions.length,

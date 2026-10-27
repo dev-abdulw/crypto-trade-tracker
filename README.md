@@ -28,6 +28,11 @@ Live: https://dev-abdulw.github.io/crypto-trade-tracker/
 - Two open positions in the same coin can be **merged** into one (fills combine, average entry is
   recalculated). New trade offers to add to an open position in that coin instead of opening
   another.
+- **Al Meezan tab** (PKR, separate from crypto): log money added per family member and fund
+  (AMMF / MIACF) and type the balance from the Al Meezan app every day or two. Money earns from
+  the day after it is added; profit between updates is the balance change minus money added, so
+  the app derives daily / monthly / yearly rates (compounded), profit in Rs before and after 15%
+  tax, and 1–30 year projections with profit reinvested, with or without a monthly SIP.
 - After a month ends, the app saves that month's unrealized P&L and portfolio value once, at
   CoinGecko's month-close price, so it doesn't change later.
 
@@ -61,7 +66,7 @@ rows. **Never** put the `service_role` / secret key in this repo or in the app.
 
 1. Create a project at supabase.com (free tier).
 2. SQL Editor → paste `supabase/migrations/0001_init.sql` → Run, then the same for
-   `0002_balance_adjustments.sql`.
+   `0002_balance_adjustments.sql` and `0003_meezan.sql`.
 3. Start the app, choose **Create the owner account**, and sign in.
 4. **Turn off new sign-ups** so nobody else can register: Authentication → Sign In / Providers →
    disable **Allow new users to sign up**.

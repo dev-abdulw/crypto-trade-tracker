@@ -281,3 +281,71 @@ export function CumulativeChart({ data }: { data: CumDatum[] }) {
     </div>
   );
 }
+
+// ---------- Meezan projection ----------
+
+interface ProjectionDatum {
+  year: number;
+  reinvest: number;
+  sip: number | null;
+}
+
+function ProjectionTooltip({ active, payload }: TooltipProps<number, string>) {
+  const p = payload?.[0]?.payload as ProjectionDatum | undefined;
+  if (!active || !p) return null;
+  const rs = (n: number) => `Rs ${Math.round(n).toLocaleString('en-IN')}`;
+  return (
+    <TooltipBox title={`After ${p.year} year${p.year === 1 ? '' : 's'} (after tax)`}>
+      {p.sip !== null && (
+        <div>
+          <Swatch color={C.line} />
+          With SIP {rs(p.sip)}
+        </div>
+      )}
+      <div>
+        <Swatch color={C.reference} dashed />
+        Reinvest only {rs(p.reinvest)}
+      </div>
+    </TooltipBox>
+  );
+}
+
+export function ProjectionChart({ data }: { data: ProjectionDatum[] }) {
+  const hasSip = data.some((d) => d.sip !== null);
+  return (
+    <div className="h-56" role="img" aria-label="Projected value after tax, by year">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke={C.grid} vertical={false} />
+          <XAxis dataKey="year" tickFormatter={(y: number) => `${y}y`} {...axisProps} />
+          <YAxis tickFormatter={compact} width={48} {...axisProps} />
+          <Tooltip
+            content={<ProjectionTooltip />}
+            cursor={{ stroke: C.axis, strokeDasharray: '3 3' }}
+          />
+          {hasSip && <Legend iconType="plainline" wrapperStyle={{ fontSize: 12, color: C.axis }} />}
+          <Line
+            name="Reinvest only"
+            dataKey="reinvest"
+            stroke={C.reference}
+            strokeDasharray={hasSip ? '4 4' : undefined}
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive={false}
+          />
+          {hasSip && (
+            <Line
+              name="With SIP"
+              dataKey="sip"
+              stroke={C.line}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4, stroke: C.surface, strokeWidth: 2 }}
+              isAnimationActive={false}
+            />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}

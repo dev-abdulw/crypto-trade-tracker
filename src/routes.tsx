@@ -13,6 +13,7 @@ const Months = lazy(() => import('./pages/Months'));
 const Month = lazy(() => import('./pages/Month'));
 const Capital = lazy(() => import('./pages/Capital'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Meezan = lazy(() => import('./pages/Meezan'));
 
 function PageFallback() {
   return (
@@ -43,6 +44,7 @@ export default function AppRoutes() {
             ['months', Months],
             ['months/:month', Month],
             ['capital', Capital],
+            ['meezan', Meezan],
             ['settings', Settings],
           ] as const
         ).map(([path, Page]) => (

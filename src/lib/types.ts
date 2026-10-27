@@ -68,3 +68,13 @@ export interface BalanceAdjustmentRow extends Timestamps {
   occurred_at: string;
   note: string | null;
 }
+
+export interface MeezanEntryRow extends Timestamps {
+  id: string;
+  owner: string;
+  fund: 'AMMF' | 'MIACF';
+  kind: 'deposit' | 'withdrawal' | 'valuation';
+  amount_pkr: Numeric;
+  occurred_at: string;
+  note: string | null;
+}

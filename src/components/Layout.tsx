@@ -9,6 +9,7 @@ const NAV: NavItem[] = [
   { to: '/trades/new', label: '+', primary: true },
   { to: '/months', label: 'Months' },
   { to: '/capital', label: 'Capital' },
+  { to: '/meezan', label: 'Meezan' },
 ];
 
 function navClass({ isActive }: { isActive: boolean }) {
@@ -57,7 +58,7 @@ export default function Layout() {
 
       {/* Bottom tab bar (mobile) */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-10 border-t border-border bg-surface/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-        <div className="grid grid-cols-5 h-16">
+        <div className="grid grid-cols-6 h-16">
           {NAV.map((item) => (
             <NavLink
               key={item.to}

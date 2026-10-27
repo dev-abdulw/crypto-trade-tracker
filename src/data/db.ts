@@ -35,3 +35,6 @@ export async function fetchAll<T>(
 
 export const ADJUSTMENT_COLS =
   'id,user_id,amount_usdt::text,basis_usdt::text,occurred_at,note,created_at,updated_at';
+
+export const MEEZAN_COLS =
+  'id,user_id,owner,fund,kind,amount_pkr::text,occurred_at,note,created_at,updated_at';

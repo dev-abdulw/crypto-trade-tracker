@@ -74,3 +74,22 @@ export function formatPct(
   if (n.isNegative() && !n.isZero()) return `-${s}`;
   return opts.sign && n.gt(0) ? `+${s}` : s;
 }
+
+const rsFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+
+/** Rupees with lakh grouping, e.g. 3104592 → "Rs 31,04,592". */
+export function formatRs(v: Value | null | undefined, opts: { sign?: boolean } = {}): string {
+  if (v === null || v === undefined) return '—';
+  const n = d(v).toDecimalPlaces(0);
+  const s = `Rs ${rsFmt.format(n.abs().toNumber())}`;
+  if (n.isNegative() && !n.isZero()) return `-${s}`;
+  return opts.sign && n.gt(0) ? `+${s}` : s;
+}
+
+/** 3104592 → "31.05 lakh"; 12500000 → "1.25 crore". */
+export function formatLakh(v: Value): string {
+  const n = d(v);
+  return n.abs().gte(10_000_000)
+    ? `${n.div(10_000_000).toDecimalPlaces(2).toFixed()} crore`
+    : `${n.div(100_000).toDecimalPlaces(2).toFixed()} lakh`;
+}
