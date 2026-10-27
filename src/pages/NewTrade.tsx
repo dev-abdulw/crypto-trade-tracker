@@ -60,7 +60,7 @@ export default function NewTrade() {
 
   return (
     <div className="max-w-xl">
-      <PageHeader title="New trade" />
+      <PageHeader eyebrow="Crypto" title="New trade" />
       <div className="space-y-4">
         <Card>
           <Field label="Coin (paired with USDT)">

@@ -28,7 +28,7 @@ export default function Months() {
 
   return (
     <>
-      <PageHeader title="Monthly" />
+      <PageHeader eyebrow="Crypto" title="Monthly" />
       <ErrorText error={overview.error} />
       {overview.isLoading && <div className="h-48 animate-pulse rounded-xl bg-card" />}
       {data && reports.length === 0 && (

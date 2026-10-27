@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import PriceStatus from '../components/PriceStatus';
-import { Card, ErrorText, Pnl, StatusBadge } from '../components/ui';
+import { Card, ErrorText, Pnl, StatusBadge, primaryLinkClass } from '../components/ui';
 import { useLivePortfolio } from '../data/prices';
 import type { PositionView } from '../data/trades';
 import { formatDate, formatDuration } from '../lib/dates';
@@ -89,12 +89,10 @@ export default function Trades() {
   return (
     <>
       <PageHeader
+        eyebrow="Crypto"
         title="Trades"
         actions={
-          <Link
-            to="/trades/new"
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90"
-          >
+          <Link to="/trades/new" className={primaryLinkClass}>
             New trade
           </Link>
         }

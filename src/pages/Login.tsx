@@ -50,12 +50,20 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6">
-        <h1 className="text-lg font-semibold mb-1">
-          {mode === 'signin' ? 'Sign in' : 'Create account'}
+    <div className="min-h-screen flex flex-col items-center justify-center px-4">
+      <div className="mb-8 flex flex-col items-center">
+        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-accent-strong to-accent/70 shadow-[0_12px_32px_-8px_rgb(212_175_106/0.7)]">
+          <span className="h-5 w-5 rotate-45 rounded-[4px] bg-on-accent/85" />
+        </span>
+        <div className="mt-4 font-display text-4xl text-gold">Ledger</div>
+        <div className="mt-1 text-[11px] uppercase tracking-[0.25em] text-muted">
+          Crypto · Funds · Family
+        </div>
+      </div>
+      <div className="card-premium w-full max-w-sm rounded-3xl border border-border p-6">
+        <h1 className="font-display text-xl mb-5">
+          {mode === 'signin' ? 'Welcome back' : 'Create the owner account'}
         </h1>
-        <p className="text-muted text-sm mb-5">Trade Tracker</p>
 
         {!isSupabaseConfigured && (
           <p className="mb-4 rounded-md border border-loss/40 bg-loss/10 p-3 text-sm text-loss">
@@ -66,7 +74,9 @@ export default function Login() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
           <label className="block">
-            <span className="text-sm text-muted">Email</span>
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
+              Email
+            </span>
             <input
               type="email"
               autoComplete="email"
@@ -76,7 +86,9 @@ export default function Login() {
             {errors.email && <span className="text-xs text-loss">{errors.email.message}</span>}
           </label>
           <label className="block">
-            <span className="text-sm text-muted">Password</span>
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
+              Password
+            </span>
             <input
               type="password"
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
@@ -94,7 +106,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={isSubmitting || !isSupabaseConfigured}
-            className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="w-full rounded-xl bg-gradient-to-b from-accent-strong to-accent px-3 py-2.5 text-sm font-semibold text-on-accent shadow-[0_8px_24px_-10px_rgb(212_175_106/0.8)] transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-50"
           >
             {isSubmitting ? '…' : mode === 'signin' ? 'Sign in' : 'Create account'}
           </button>

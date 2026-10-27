@@ -5,7 +5,15 @@ import AdjustBalanceForm from '../components/AdjustBalanceForm';
 import { EquityChart } from '../components/charts';
 import PageHeader from '../components/PageHeader';
 import PriceStatus from '../components/PriceStatus';
-import { Card, ErrorText, Modal, Pnl } from '../components/ui';
+import {
+  Card,
+  ErrorText,
+  Hero,
+  Modal,
+  Pnl,
+  primaryLinkClass,
+  secondaryLinkClass,
+} from '../components/ui';
 import { useOverview } from '../data/months';
 import type { PositionView } from '../data/trades';
 import { formatDate, formatDuration } from '../lib/dates';
@@ -26,12 +34,12 @@ function Kpi({
   action?: ReactNode;
 }) {
   return (
-    <Card className="p-3">
-      <div className="flex items-center justify-between gap-2 text-xs text-muted">
+    <Card className="p-4">
+      <div className="flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-wider text-muted">
         {label}
         {action}
       </div>
-      <div className="mt-1 text-lg font-semibold tabular-nums">{children}</div>
+      <div className="mt-2 font-display text-2xl tabular-nums">{children}</div>
       {sub && <div className="text-xs tabular-nums">{sub}</div>}
     </Card>
   );
@@ -143,7 +151,11 @@ export default function Dashboard() {
   }, [data]);
 
   const header = (
-    <PageHeader title="Dashboard" actions={<PriceStatus prices={overview.prices} />} />
+    <PageHeader
+      eyebrow="Crypto"
+      title="Dashboard"
+      actions={<PriceStatus prices={overview.prices} />}
+    />
   );
 
   if (overview.isLoading || !data || !derived) {
@@ -226,50 +238,52 @@ export default function Dashboard() {
               Start by recording the USDT you deposited, then log your first trade.
             </p>
             <div className="flex gap-2">
-              <Link
-                to="/capital"
-                className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-surface"
-              >
+              <Link to="/capital" className={secondaryLinkClass}>
                 Add investment
               </Link>
-              <Link
-                to="/trades/new"
-                className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white"
-              >
+              <Link to="/trades/new" className={primaryLinkClass}>
                 New trade
               </Link>
             </div>
           </Card>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <Kpi
-            label="Portfolio value"
-            action={
-              <button
-                type="button"
-                onClick={() => setAdjusting(true)}
-                className="text-muted hover:text-fg underline decoration-dotted"
-                title="Correct the balance to match Binance"
-              >
-                Edit
-              </button>
-            }
-            sub={
-              !account.adjustmentsTotal.isZero() && (
+        <Hero
+          label="Portfolio value"
+          value={
+            <>
+              {formatUsdt(account.portfolioValue)}
+              <span className="ml-2 align-middle font-sans text-base text-muted">USDT</span>
+            </>
+          }
+          sub={
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span>
+                <Pnl value={account.totalReturn} pct={account.totalReturnPct} />{' '}
+                <span className="text-muted">all time</span>
+              </span>
+              {!account.adjustmentsTotal.isZero() && (
                 <span className="text-muted">
                   incl. adjustments <Pnl value={account.adjustmentsTotal} />
                 </span>
-              )
-            }
-          >
-            {formatUsdt(account.portfolioValue)}
-          </Kpi>
+              )}
+            </span>
+          }
+          aside={
+            <button
+              type="button"
+              onClick={() => setAdjusting(true)}
+              className="rounded-xl border border-border px-3 py-1.5 text-xs text-muted hover:border-accent/40 hover:text-fg"
+              title="Correct the balance to match Binance"
+            >
+              Edit balance
+            </button>
+          }
+        />
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <Kpi label="Net invested">{formatUsdt(account.netInvested)}</Kpi>
-          <Kpi
-            label="Total return"
-            sub={<Pnl value={account.totalReturn} pct={account.totalReturnPct} />}
-          >
+          <Kpi label="Total return" sub={<Pnl value={account.totalReturn} />}>
             <span className={account.totalReturn.gte(0) ? 'text-profit' : 'text-loss'}>
               {formatPct(account.totalReturnPct)}
             </span>

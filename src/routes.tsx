@@ -13,7 +13,11 @@ const Months = lazy(() => import('./pages/Months'));
 const Month = lazy(() => import('./pages/Month'));
 const Capital = lazy(() => import('./pages/Capital'));
 const Settings = lazy(() => import('./pages/Settings'));
-const Meezan = lazy(() => import('./pages/Meezan'));
+const FundsOverview = lazy(() => import('./pages/funds/Overview'));
+const FundsFamily = lazy(() => import('./pages/funds/Family'));
+const FundsProjections = lazy(() => import('./pages/funds/Projections'));
+const FundsHistory = lazy(() => import('./pages/funds/History'));
+const FundsNewEntry = lazy(() => import('./pages/funds/NewEntry'));
 
 function PageFallback() {
   return (
@@ -44,7 +48,11 @@ export default function AppRoutes() {
             ['months', Months],
             ['months/:month', Month],
             ['capital', Capital],
-            ['meezan', Meezan],
+            ['funds', FundsOverview],
+            ['funds/family', FundsFamily],
+            ['funds/projections', FundsProjections],
+            ['funds/history', FundsHistory],
+            ['funds/new', FundsNewEntry],
             ['settings', Settings],
           ] as const
         ).map(([path, Page]) => (
@@ -59,6 +67,7 @@ export default function AppRoutes() {
           />
         ))}
       </Route>
+      <Route path="/meezan" element={<Navigate to="/funds" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

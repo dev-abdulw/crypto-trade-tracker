@@ -121,6 +121,7 @@ export default function Capital() {
   return (
     <>
       <PageHeader
+        eyebrow="Crypto"
         title="Capital"
         actions={
           <div className="flex flex-wrap justify-end gap-2">

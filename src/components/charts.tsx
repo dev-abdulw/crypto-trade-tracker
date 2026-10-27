@@ -22,13 +22,13 @@ import { formatUsdt } from '../lib/money';
 // Chart colors (validated against the dark card surface). Sign is always also encoded by
 // position relative to the zero line and by signed values in tooltips.
 const C = {
-  line: '#3b82f6',
-  reference: '#8b98a5',
-  profit: '#22c55e',
-  loss: '#ef4444',
-  grid: '#222c38',
-  axis: '#8b98a5',
-  surface: '#131a22',
+  line: '#d4af6a',
+  reference: '#8f8a80',
+  profit: '#34c98b',
+  loss: '#ef6461',
+  grid: '#232227',
+  axis: '#8f8a80',
+  surface: '#141416',
 };
 
 const axisProps = {
@@ -43,7 +43,7 @@ function compact(n: number): string {
 
 function TooltipBox({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-lg">
+    <div className="rounded-xl border border-accent/20 bg-card/95 px-3 py-2 text-xs shadow-xl backdrop-blur">
       <div className="mb-1 text-muted">{title}</div>
       <div className="space-y-0.5 tabular-nums text-fg">{children}</div>
     </div>
@@ -208,7 +208,7 @@ export function PnlBars({
           <XAxis dataKey="label" interval="preserveStartEnd" {...axisProps} />
           <YAxis tickFormatter={compact} width={48} {...axisProps} />
           <ReferenceLine y={0} stroke={C.axis} />
-          <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(139,152,165,0.08)' }} />
+          <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(212,175,106,0.06)' }} />
           <Bar
             dataKey="pnl"
             radius={[3, 3, 3, 3]}

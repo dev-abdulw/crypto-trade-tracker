@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { differenceInCalendarDays, format } from 'date-fns';
 
 /** Value for an <input type="datetime-local"> in the browser's time zone. */
 export function toLocalInput(v: Date | string = new Date()): string {
@@ -28,4 +28,10 @@ export function formatDuration(ms: number): string {
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${mins}m`;
   return `${mins}m`;
+}
+
+/** "today", "yesterday" or "3 days ago" (calendar days). */
+export function sinceText(at: Date | string): string {
+  const days = differenceInCalendarDays(new Date(), new Date(at));
+  return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
 }
